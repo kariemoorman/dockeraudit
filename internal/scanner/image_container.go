@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"https://github.com/kariemoorman/dockeraudit/internal/types"
+	"github.com/kariemoorman/dockeraudit/internal/types"
 )
 
 // ── IMAGE-007: Secret files in filesystem ─────────────────────────────────────

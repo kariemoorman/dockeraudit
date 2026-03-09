@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"https://github.com/kariemoorman/dockeraudit/internal/types"
+	"github.com/kariemoorman/dockeraudit/internal/types"
 )
 
 // Confidence thresholds for scoring-based false positive detection.

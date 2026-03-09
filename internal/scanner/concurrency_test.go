@@ -7,7 +7,7 @@ import (
 	"sync"
 	"testing"
 
-	"https://github.com/kariemoorman/dockeraudit/internal/types"
+	"github.com/kariemoorman/dockeraudit/internal/types"
 )
 
 func TestConcurrentScanners(t *testing.T) {

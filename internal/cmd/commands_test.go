@@ -3,7 +3,7 @@ package cmd
 import (
 	"testing"
 
-	"dockeraudit/internal/types"
+	"github.com/kariemoorman/dockeraudit/internal/types"
 )
 
 func TestComputeExitCode(t *testing.T) {

@@ -3,7 +3,7 @@ package scanner
 import (
 	"context"
 
-	"https://github.com/kariemoorman/dockeraudit/internal/types"
+	"github.com/kariemoorman/dockeraudit/internal/types"
 )
 
 // Scanner is the common interface implemented by all scan engines.

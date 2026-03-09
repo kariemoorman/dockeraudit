@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"https://github.com/kariemoorman/dockeraudit/internal/types"
+	"github.com/kariemoorman/dockeraudit/internal/types"
 
 	"gopkg.in/yaml.v3"
 )

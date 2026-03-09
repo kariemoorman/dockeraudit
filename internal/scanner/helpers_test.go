@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"https://github.com/kariemoorman/dockeraudit/internal/types"
+	"github.com/kariemoorman/dockeraudit/internal/types"
 )
 
 

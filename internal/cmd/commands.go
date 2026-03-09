@@ -11,9 +11,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"dockeraudit/internal/reporter"
-	"dockeraudit/internal/scanner"
-	"dockeraudit/internal/types"
+	"github.com/kariemoorman/dockeraudit/internal/reporter"
+	"github.com/kariemoorman/dockeraudit/internal/scanner"
+	"github.com/kariemoorman/dockeraudit/internal/types"
 )
 
 // Verbose enables per-check progress output to stderr when the --verbose flag is set.

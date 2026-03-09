@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"https://github.com/kariemoorman/dockeraudit/internal/types"
+	"github.com/kariemoorman/dockeraudit/internal/types"
 )
 
 // ── helpers (shared with k8s_test.go via same package) ───────────────────────

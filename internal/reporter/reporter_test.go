@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"dockeraudit/internal/types"
+	"github.com/kariemoorman/dockeraudit/internal/types"
 )
 
 // mkResults returns a test ScanResult with a mix of PASS, FAIL, and WARN findings.

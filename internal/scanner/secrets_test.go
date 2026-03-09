@@ -3,7 +3,7 @@ package scanner
 import (
 	"testing"
 
-	"https://github.com/kariemoorman/dockeraudit/internal/types"
+	"github.com/kariemoorman/dockeraudit/internal/types"
 )
 
 // newTestSecretScanner creates a SecretScanner for testing.

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"dockeraudit/internal/types"
+	"github.com/kariemoorman/dockeraudit/internal/types"
 )
 
 // Column widths in visible (printable) characters.

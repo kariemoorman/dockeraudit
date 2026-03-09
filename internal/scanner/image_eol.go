@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"strings"
 
-	"https://github.com/kariemoorman/dockeraudit/internal/types"
+	"github.com/kariemoorman/dockeraudit/internal/types"
 )
 
 // EOLEntry, DefaultEOLImages, eolTagMatches, and imageNameTag are defined in helpers.go

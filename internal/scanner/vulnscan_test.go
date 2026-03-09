@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"https://github.com/kariemoorman/dockeraudit/internal/types"
+	"github.com/kariemoorman/dockeraudit/internal/types"
 )
 
 func TestTrivyConfigToFindings_MultipleResults(t *testing.T) {

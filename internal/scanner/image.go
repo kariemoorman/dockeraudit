@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"https://github.com/kariemoorman/dockeraudit/internal/types"
+	"github.com/kariemoorman/dockeraudit/internal/types"
 )
 
 // validImageRef is a lightweight regex that matches valid Docker image references.

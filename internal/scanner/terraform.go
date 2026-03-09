@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"https://github.com/kariemoorman/dockeraudit/internal/types"
+	"github.com/kariemoorman/dockeraudit/internal/types"
 )
 
 // TerraformScanner checks Terraform HCL files for container-security misconfigurations.

@@ -10,7 +10,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"https://github.com/kariemoorman/dockeraudit/internal/types"
+	"github.com/kariemoorman/dockeraudit/internal/types"
 )
 
 // ── tool detection ───────────────────────────────────────────────────────────

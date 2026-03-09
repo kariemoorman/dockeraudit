@@ -9,7 +9,7 @@ import (
 	"strings"
 	"strconv"
 
-	"https://github.com/kariemoorman/dockeraudit/internal/types"
+	"github.com/kariemoorman/dockeraudit/internal/types"
 )
 
 // containerInspect holds fields from docker inspect for a running container.

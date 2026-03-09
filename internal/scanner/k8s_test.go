@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"https://github.com/kariemoorman/dockeraudit/internal/types"
+	"github.com/kariemoorman/dockeraudit/internal/types"
 )
 
 // testdataDir returns the absolute path to the testdata directory,
