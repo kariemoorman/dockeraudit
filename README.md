@@ -30,6 +30,8 @@
   - Audits terraform files for misconfigurations, secrets, and other security vulnerabilities, including cloud resources (e.g., AWS: ECR, EKS, S3, ECS, RDS, ElastiCache, DynamoDB).
 - **Secrets Detection**: 
   - 76+ regex patterns with confidence scoring and false-positive suppression.
+- **Vulnerability Detection**:
+  - Uses Trivy and Snyk for CVE scanning via `--scanner` flag.
 - **Auto-Saved Reports**: 
   - Each scan writes a timestamped copy to `scans/` for audit trails.
   - 5 output formats - table (TXT), JSON, Markdown, SARIF (GitHub Security), JUnit (CI/CD).

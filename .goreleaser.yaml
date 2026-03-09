@@ -40,7 +40,7 @@ checksum:
 release:
   github:
     owner: "{{ if .Env.GITHUB_REPOSITORY_OWNER }}{{ .Env.GITHUB_REPOSITORY_OWNER }}{{ else }}kariemoorman{{ end }}"
-    name: dockeraudit_private
+    name: dockeraudit
   draft: false
   prerelease: auto
   name_template: "v{{.Version}}"
