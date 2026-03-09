@@ -1,0 +1,231 @@
+# Hardened K8s manifests demonstrating secure implementations of newly added controls
+# Controls satisfied:
+#   NETWORK-001 (PASS) — Default-deny NetworkPolicy blocks all ingress by default
+#   SECRETS-001 (PASS) — ExternalSecret operator manages secrets externally
+#   SECRETS-002 (PASS) — Role scoped to named secrets via resourceNames
+#   SUPPLY-001  (PASS) — Kyverno ClusterPolicy verifies image signatures
+#   MONITOR-001 (PASS) — Falco DaemonSet provides runtime threat detection
+#   MONITOR-002 (PASS) — API server audit policy defines logging rules
+#
+# Run: dockeraudit k8s testdata/manifests/security-controls-hardened.yaml
+# Compare with: testdata/manifests/security-controls-insecure.yaml
+---
+# PASS: MONITOR-002 — Kubernetes API server audit policy
+# This policy defines what API actions get logged. It is referenced by the
+# kube-apiserver via --audit-policy-file. Without it, secret reads, RBAC
+# changes, and pod exec activity are invisible for forensics.
+apiVersion: audit.k8s.io/v1
+kind: Policy
+metadata:
+  name: k8s-audit-policy
+spec:
+  rules:
+  # Log secret access at Metadata level (who accessed which secret, when)
+  - level: Metadata
+    resources:
+    - group: ""
+      resources: ["secrets"]
+  # Log pod exec and attach at RequestResponse level (full request/response)
+  - level: RequestResponse
+    resources:
+    - group: ""
+      resources: ["pods/exec", "pods/attach"]
+  # Log RBAC changes
+  - level: Metadata
+    resources:
+    - group: "rbac.authorization.k8s.io"
+      resources: ["clusterroles", "clusterrolebindings", "roles", "rolebindings"]
+  # Log all other requests at Metadata level
+  - level: Metadata
+---
+# PASS: NETWORK-001 — Default-deny NetworkPolicy
+# This policy selects all pods (empty podSelector) and declares Ingress
+# as a policy type with no ingress rules, effectively blocking all
+# inbound traffic unless explicitly allowed by another NetworkPolicy.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: production
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  # No ingress rules = deny all inbound traffic by default
+---
+# PASS: SECRETS-001 — ExternalSecret operator manages secrets externally
+# Secrets are fetched from AWS Secrets Manager at runtime and injected
+# as K8s Secrets — no plaintext values stored in manifests or etcd.
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: app-credentials
+  namespace: production
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-secrets-manager
+    kind: ClusterSecretStore
+  target:
+    name: app-credentials
+    creationPolicy: Owner
+  data:
+  - secretKey: database-url
+    remoteRef:
+      key: prod/app/database-url
+  - secretKey: api-key
+    remoteRef:
+      key: prod/app/api-key
+---
+# PASS: SECRETS-002 — Role scoped to specific named secrets
+# This Role only grants access to the exact secrets the application needs,
+# not all secrets in the namespace. Combined with a RoleBinding to the
+# application's ServiceAccount, this follows least-privilege.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: app-secret-reader
+  namespace: production
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get"]
+  resourceNames: ["app-credentials", "tls-cert"]
+---
+# PASS: SUPPLY-001 — Kyverno ClusterPolicy with verifyImages
+# This admission policy rejects any Pod whose images are not signed with
+# the organization's Cosign key. Prevents deployment of unsigned,
+# tampered, or unauthorized images.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: verify-image-signatures
+  annotations:
+    policies.kyverno.io/title: Verify Image Signatures
+    policies.kyverno.io/category: Supply Chain Security
+    policies.kyverno.io/severity: critical
+spec:
+  validationFailureAction: Enforce
+  background: false
+  rules:
+  - name: verify-cosign-signature
+    match:
+      any:
+      - resources:
+          kinds: [Pod]
+    exclude:
+      any:
+      - resources:
+          namespaces: [kube-system, kube-public]
+    verifyImages:
+    - imageReferences:
+      - "registry.example.com/*"
+      attestors:
+      - count: 1
+        entries:
+        - keys:
+            publicKeys: |-
+              -----BEGIN PUBLIC KEY-----
+              MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEexample...
+              -----END PUBLIC KEY-----
+---
+# PASS: MONITOR-001 — Falco DaemonSet for runtime threat detection
+# Falco runs on every node and detects suspicious syscalls, container
+# escapes, privilege escalation, cryptominer activity, and more.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: falco
+  namespace: falco-system
+  labels:
+    app.kubernetes.io/name: falco
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: falco
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: falco
+    spec:
+      serviceAccountName: falco
+      tolerations:
+      - effect: NoSchedule
+        operator: Exists
+      containers:
+      - name: falco
+        image: falcosecurity/falco:0.37.1@sha256:abc123def456abc123def456abc123def456abc123def456abc123def456abc1
+        securityContext:
+          privileged: true
+        resources:
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+          requests:
+            memory: "512Mi"
+            cpu: "100m"
+        volumeMounts:
+        - name: dev
+          mountPath: /host/dev
+        - name: proc
+          mountPath: /host/proc
+          readOnly: true
+        - name: boot
+          mountPath: /host/boot
+          readOnly: true
+      volumes:
+      - name: dev
+        hostPath:
+          path: /dev
+      - name: proc
+        hostPath:
+          path: /proc
+      - name: boot
+        hostPath:
+          path: /boot
+---
+# Secure Deployment (no docker.sock, no sensitive host paths)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ci-runner-secure
+  namespace: production
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ci-runner
+  template:
+    metadata:
+      labels:
+        app: ci-runner
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: runner
+        image: registry.example.com/ci-runner@sha256:abc123def456abc123def456abc123def456abc123def456abc123def456abc1
+        securityContext:
+          privileged: false
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        resources:
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+        volumeMounts:
+        - name: workspace
+          mountPath: /workspace
+      volumes:
+      - name: workspace
+        emptyDir: {}
+        # No hostPath volumes — no DAEMON-001 or RUNTIME-009 issues

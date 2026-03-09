@@ -1,0 +1,68 @@
+# INSECURE PostgreSQL deployment — for scanner FAIL case testing only
+# This file intentionally violates multiple controls. DO NOT deploy in production.
+# Expected scanner findings:
+#   FAIL SECRETS-001: password in plain ENV
+#   FAIL RUNTIME-001: no runAsNonRoot
+#   FAIL RUNTIME-005: privileged: true
+#   FAIL RUNTIME-003: no cap drop
+#   FAIL RUNTIME-012: no liveness/readiness probes
+#   FAIL DB-K8S-001: POSTGRES_TRUST_ALL=true auth-disabling ENV
+#   FAIL DB-K8S-003: Service type LoadBalancer (DB port externally exposed)
+#   FAIL DB-K8S-004: emptyDir used for data directory
+#   FAIL DB-K8S-005: no fsGroup
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-insecure
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres-insecure
+  template:
+    metadata:
+      labels:
+        app: postgres-insecure
+      annotations:
+        db.connection: "postgres://admin:hardcoded_pass@postgres:5432/prod"  # FAIL DB-K8S-006
+    spec:
+      # No securityContext — FAIL DB-K8S-005 (no fsGroup), FAIL RUNTIME-001 (runAsNonRoot not set)
+      containers:
+      - name: postgres
+        image: postgres:latest   # mutable tag — FAIL IMAGE-003
+        env:
+        - name: POSTGRES_PASSWORD
+          value: "hardcoded_plain_password"  # FAIL SECRETS-001
+        - name: POSTGRES_HOST_AUTH_METHOD
+          value: "trust"                     # FAIL DB-K8S-001 (trust = no auth)
+        securityContext:
+          privileged: true                   # FAIL RUNTIME-005
+          runAsUser: 0                       # FAIL RUNTIME-001
+          allowPrivilegeEscalation: true     # FAIL RUNTIME-004
+          readOnlyRootFilesystem: false      # FAIL RUNTIME-008 (if Redis, CRITICAL)
+          # No capabilities.drop              # FAIL RUNTIME-003
+        ports:
+        - containerPort: 5432
+        # No livenessProbe                   # FAIL RUNTIME-012
+        # No readinessProbe                  # FAIL RUNTIME-012
+        # No resources                       # FAIL RUNTIME-006, RUNTIME-007
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/postgresql/data
+      volumes:
+      - name: data
+        emptyDir: {}                          # FAIL DB-K8S-004
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-insecure
+  namespace: default
+spec:
+  type: LoadBalancer                          # FAIL DB-K8S-003: DB on public IP
+  selector:
+    app: postgres-insecure
+  ports:
+  - port: 5432
+    targetPort: 5432

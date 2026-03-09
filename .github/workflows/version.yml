@@ -1,0 +1,203 @@
+name: "Version"
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract current version from version.go
+        id: current
+        run: |
+          VERSION=$(grep -oP 'const Version = "\K[0-9]+\.[0-9]+\.[0-9]+' cmd/dockeraudit/version.go)
+          if [[ -z "$VERSION" ]]; then
+            echo "ERROR: Could not extract version from version.go"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Current version: $VERSION"
+
+      - name: Check if current version tag exists
+        id: currenttag
+        run: |
+          CURRENT_TAG="v${{ steps.current.outputs.version }}"
+          if git rev-parse "$CURRENT_TAG" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Tag $CURRENT_TAG exists"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "Tag $CURRENT_TAG does not exist"
+          fi
+
+      - name: Determine version bump from conventional commits
+        id: bump
+        run: |
+          CURRENT_TAG="v${{ steps.current.outputs.version }}"
+          TAG_EXISTS="${{ steps.currenttag.outputs.exists }}"
+          
+          if [[ "$TAG_EXISTS" == "true" ]]; then
+            RANGE="${CURRENT_TAG}..HEAD"
+          else
+            LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+            if [[ -n "$LATEST_TAG" ]]; then
+              RANGE="${LATEST_TAG}..HEAD"
+            else
+              RANGE=""
+            fi
+          fi
+          
+          echo "Commit range: ${RANGE:-all commits}"
+          
+          if [[ -z "$RANGE" ]]; then
+            COMMITS=$(git log --pretty=format:"%s")
+          else
+            COMMITS=$(git log "$RANGE" --pretty=format:"%s" 2>/dev/null || echo "")
+          fi
+          
+          if [[ -z "$COMMITS" ]]; then
+            echo "No commits to analyze"
+            echo "bump=none" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          
+          echo "Commits found:"
+          echo "$COMMITS"
+          echo ""
+          
+          BUMP="none"
+          
+          if echo "$COMMITS" | grep -qE '^[a-z]+(\(.+\))?!:|BREAKING CHANGE:'; then
+            BUMP="major"
+          elif echo "$COMMITS" | grep -qE '^feat(\(.+\))?:'; then
+            BUMP="minor"
+          elif echo "$COMMITS" | grep -qE '^fix(\(.+\))?:'; then
+            BUMP="patch"
+          fi
+          
+          echo "Bump type: $BUMP"
+          echo "bump=$BUMP" >> "$GITHUB_OUTPUT"
+
+      - name: Calculate new version
+        id: newversion
+        run: |
+          CURRENT="${{ steps.current.outputs.version }}"
+          BUMP="${{ steps.bump.outputs.bump }}"
+          
+          if [[ "$BUMP" == "none" ]]; then
+            echo "new_version=$CURRENT" >> "$GITHUB_OUTPUT"
+            echo "No bump needed, version remains: $CURRENT"
+            exit 0
+          fi
+          
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
+          
+          case "$BUMP" in
+            major)
+              MAJOR=$((MAJOR + 1))
+              MINOR=0
+              PATCH=0
+              ;;
+            minor)
+              MINOR=$((MINOR + 1))
+              PATCH=0
+              ;;
+            patch)
+              PATCH=$((PATCH + 1))
+              ;;
+          esac
+          
+          NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+          echo "New version: $NEW_VERSION"
+
+      - name: Check if new version tag exists
+        id: newtagcheck
+        run: |
+          NEW_TAG="v${{ steps.newversion.outputs.new_version }}"
+          if git rev-parse "$NEW_TAG" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Tag $NEW_TAG already exists"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "Tag $NEW_TAG does not exist"
+          fi
+
+      - name: Determine action
+        id: action
+        run: |
+          BUMP="${{ steps.bump.outputs.bump }}"
+          CURRENT_TAG_EXISTS="${{ steps.currenttag.outputs.exists }}"
+          NEW_TAG_EXISTS="${{ steps.newtagcheck.outputs.exists }}"
+          
+          ACTION="none"
+          
+          # First priority: tag current version if missing
+          if [[ "$CURRENT_TAG_EXISTS" == "false" ]]; then
+            ACTION="tag_only"
+          # Second priority: bump if needed and new tag doesn't exist
+          elif [[ "$BUMP" != "none" && "$NEW_TAG_EXISTS" == "false" ]]; then
+            ACTION="bump_and_tag"
+          fi
+          
+          echo "action=$ACTION" >> "$GITHUB_OUTPUT"
+          echo "Action: $ACTION"
+
+      - name: Update version.go
+        if: steps.action.outputs.action == 'bump_and_tag'
+        run: |
+          CURRENT="${{ steps.current.outputs.version }}"
+          NEW="${{ steps.newversion.outputs.new_version }}"
+          sed -i "s/const Version = \"$CURRENT\"/const Version = \"$NEW\"/" cmd/dockeraudit/version.go
+          echo "Updated version.go: $CURRENT -> $NEW"
+
+      - name: Create Pull Request
+        if: steps.action.outputs.action == 'bump_and_tag'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: bump version to v${{ steps.newversion.outputs.new_version }}"
+          title: "chore: bump version to v${{ steps.newversion.outputs.new_version }}"
+          body: |
+            Automated version bump based on conventional commits.
+            
+            **Current version:** v${{ steps.current.outputs.version }}
+            **New version:** v${{ steps.newversion.outputs.new_version }}
+            **Bump type:** ${{ steps.bump.outputs.bump }}
+          branch: "version-bump/v${{ steps.newversion.outputs.new_version }}-${{ github.run_id }}"
+          labels: version-bump,automated
+          delete-branch: true
+
+      - name: Create tag for current version (no bump needed)
+        if: steps.action.outputs.action == 'tag_only'
+        run: |
+          TAG="v${{ steps.current.outputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "Release $TAG"
+          git push origin "$TAG"
+          echo "Created tag: $TAG"
+
+      - name: Summary
+        run: |
+          ACTION="${{ steps.action.outputs.action }}"
+          case "$ACTION" in
+            bump_and_tag)
+              echo "::notice::Created PR to bump version to v${{ steps.newversion.outputs.new_version }}"
+              ;;
+            tag_only)
+              echo "::notice::Created tag v${{ steps.current.outputs.version }} for existing version"
+              ;;
+            none)
+              echo "::notice::No action needed - version and tag are current"
+              ;;
+          esac

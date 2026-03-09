@@ -1,0 +1,98 @@
+name: "Release"
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag corresponding to version build (vX.X.X)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: GoReleaser
+    runs-on: ubuntu-latest
+    steps:
+      - name: Determine tag
+        id: get_tag
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Using tag: $TAG, version: $VERSION"
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.get_tag.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run tests
+        run: go test ./... -v -race -cover
+
+      - name: Extract changelog
+        id: changelog
+        run: |
+          VERSION="${{ steps.get_tag.outputs.version }}"
+          
+          # Extract section for this version
+          awk -v ver="$VERSION" '
+            /^## \[/ {
+              if (found) exit
+              if (index($0, "[" ver "]")) { found=1; next }
+            }
+            found { print }
+          ' CHANGELOG.md > /tmp/release_notes.md
+          
+          # Fallback to Unreleased
+          if [ ! -s /tmp/release_notes.md ]; then
+            awk '/^## \[Unreleased\]/{found=1; next} /^## \[/{exit} found{print}' CHANGELOG.md > /tmp/release_notes.md
+          fi
+          
+          # Final fallback
+          if [ ! -s /tmp/release_notes.md ]; then
+            echo "Release ${{ steps.get_tag.outputs.tag }}" > /tmp/release_notes.md
+          fi
+          
+          echo "--- Release Notes ---"
+          cat /tmp/release_notes.md
+          echo "---"
+          
+          # Store as output for softprops
+          {
+            echo 'notes<<EOF'
+            cat /tmp/release_notes.md
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: 2
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GORELEASER_CURRENT_TAG: ${{ steps.get_tag.outputs.tag }}
+          
+      - name: Update Release Notes
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.get_tag.outputs.tag }}
+          body: ${{ steps.changelog.outputs.notes }}

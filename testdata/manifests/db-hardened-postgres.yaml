@@ -1,0 +1,160 @@
+# Hardened PostgreSQL 16 StatefulSet
+# Controls satisfied: RUNTIME-001 (non-root), RUNTIME-003 (cap drop), RUNTIME-004 (no-new-privs),
+#   RUNTIME-005 (no privileged), RUNTIME-008 (seccomp), RUNTIME-010 (no sshd), RUNTIME-011 (no priv ports),
+#   RUNTIME-012 (probes), DB-K8S-001 (no auth-disabling ENV), DB-K8S-002 (auth configured),
+#   DB-K8S-003 (ClusterIP), DB-K8S-004 (PVC), DB-K8S-005 (fsGroup), SECRETS-001 (no plain secret in ENV)
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: production
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-credentials
+  namespace: production
+type: Opaque
+stringData:
+  postgres-password: "REPLACE_WITH_STRONG_PASSWORD_VIA_SEALED_SECRETS_OR_ESO"
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: production
+  labels:
+    app: postgres
+    tier: database
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+        tier: database
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: postgres
+        image: postgres:16-alpine
+        env:
+        - name: POSTGRES_PASSWORD_FILE
+          value: /run/secrets/postgres-password
+        - name: POSTGRES_DB
+          value: appdb
+        - name: POSTGRES_USER
+          value: appuser
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        ports:
+        - containerPort: 5432
+          protocol: TCP
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 999
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          privileged: false
+          capabilities:
+            drop: [ALL]
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        livenessProbe:
+          exec:
+            command: ["pg_isready", "-U", "appuser", "-d", "appdb"]
+          initialDelaySeconds: 30
+          periodSeconds: 15
+          failureThreshold: 5
+          timeoutSeconds: 5
+        readinessProbe:
+          exec:
+            command: ["pg_isready", "-U", "appuser", "-d", "appdb"]
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          failureThreshold: 3
+          timeoutSeconds: 3
+        volumeMounts:
+        - name: postgres-data
+          mountPath: /var/lib/postgresql/data
+        - name: postgres-secret
+          mountPath: /run/secrets
+          readOnly: true
+        - name: tmp
+          mountPath: /tmp
+        - name: run-postgres
+          mountPath: /var/run/postgresql
+      volumes:
+      - name: postgres-secret
+        secret:
+          secretName: postgres-credentials
+          defaultMode: 0400
+      - name: tmp
+        emptyDir: {}
+      - name: run-postgres
+        emptyDir: {}
+  volumeClaimTemplates:
+  - metadata:
+      name: postgres-data
+    spec:
+      accessModes: [ReadWriteOnce]
+      storageClassName: encrypted-ssd
+      resources:
+        requests:
+          storage: 50Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: production
+  labels:
+    app: postgres
+spec:
+  type: ClusterIP
+  selector:
+    app: postgres
+  ports:
+  - port: 5432
+    targetPort: 5432
+    protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres-isolate
+  namespace: production
+spec:
+  podSelector:
+    matchLabels:
+      app: postgres
+  policyTypes: [Ingress, Egress]
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          role: backend
+    ports:
+    - port: 5432
+      protocol: TCP
+  egress: []

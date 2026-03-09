@@ -1,0 +1,177 @@
+# Extended hardened K8s manifests — covers controls not in hardened variants
+# Controls tested (all PASS): RUNTIME-008, RUNTIME-013, RUNTIME-014,
+#   K8S-001, K8S-002, DB-K8S-003, DB-K8S-005, DB-K8S-007
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hardened-api
+  namespace: production
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: hardened-api
+  template:
+    metadata:
+      labels:
+        app: hardened-api
+      annotations:
+        container.apparmor.security.beta.kubernetes.io/api: runtime/default
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+        seLinuxOptions:
+          type: container_t
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app: hardened-api
+      containers:
+      - name: api
+        image: registry.example.com/api@sha256:abc123def456abc123def456abc123def456abc123def456abc123def456abc1
+        imagePullPolicy: Always
+        securityContext:
+          privileged: false
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          capabilities:
+            drop: ["ALL"]
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 15
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: tmp
+        emptyDir:
+          medium: Memory
+---
+# Neo4j with APOC and proper URL restrictions
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: neo4j-hardened
+  namespace: production
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: neo4j
+  template:
+    metadata:
+      labels:
+        app: neo4j
+      annotations:
+        container.apparmor.security.beta.kubernetes.io/neo4j: runtime/default
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 7474
+        fsGroup: 7474
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: neo4j
+        image: neo4j:5.15@sha256:abc123def456abc123def456abc123def456abc123def456abc123def456abc1
+        env:
+        - name: NEO4J_AUTH
+          valueFrom:
+            secretKeyRef:
+              name: neo4j-creds
+              key: auth
+        - name: NEO4J_PLUGINS
+          value: '["apoc"]'
+        - name: NEO4J_LABS_APOC_IMPORT_FILE_ENABLED
+          value: "false"
+        - name: NEO4J_dbms_security_procedures_allow__csv__import
+          value: "false"
+        securityContext:
+          privileged: false
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        resources:
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 7474
+          initialDelaySeconds: 60
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 7474
+          initialDelaySeconds: 30
+          periodSeconds: 15
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: tmp
+        emptyDir:
+          medium: Memory
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 50Gi
+---
+# ClusterIP service for database (DB-K8S-003 PASS)
+apiVersion: v1
+kind: Service
+metadata:
+  name: neo4j-svc
+  namespace: production
+spec:
+  type: ClusterIP
+  selector:
+    app: neo4j
+  ports:
+  - name: bolt
+    port: 7687
+    targetPort: 7687
+  - name: http
+    port: 7474
+    targetPort: 7474

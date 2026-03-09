@@ -1,0 +1,33 @@
+# Security-hardened Docker Compose file for testing
+version: "3.9"
+
+secrets:
+  db-password:
+    file: ./secrets/db-password
+
+networks:
+  internal:
+    driver: bridge
+    internal: true
+
+services:
+  webapp:
+    image: nginx:1.25-alpine@sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890
+    user: "1000:1000"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+          cpus: "0.5"

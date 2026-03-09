@@ -1,0 +1,97 @@
+# Insecure K8s manifests demonstrating newly implemented security controls
+# Controls violated:
+#   NETWORK-001 (WARN) — No NetworkPolicy → all pod-to-pod traffic allowed
+#   SECRETS-001 (FAIL) — Plaintext Secret with stringData
+#   SECRETS-002 (FAIL) — ClusterRole grants wildcard access to all secrets
+#   SUPPLY-001  (WARN) — No image signature verification policy
+#   MONITOR-001 (WARN) — No runtime threat detection agent (Falco/Tetragon)
+#   DAEMON-001  (FAIL) — Docker socket mounted as hostPath volume
+#
+# Run: dockeraudit k8s testdata/manifests/security-controls-insecure.yaml
+# Compare with: testdata/manifests/security-controls-hardened.yaml
+---
+# VIOLATION: SECRETS-001 — plaintext secret stored in stringData
+# Risk: Secrets in plaintext K8s manifests are visible to anyone with
+#   read access to the repo or etcd. Use ExternalSecrets, SealedSecrets,
+#   or Vault CSI instead.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-credentials
+  namespace: default
+type: Opaque
+stringData:
+  database-url: "postgresql://admin:s3cretP4ss@db.prod:5432/myapp"
+  api-key: "sk-abcdefghijklmnopqrstuvwxyz123456"
+---
+# VIOLATION: SECRETS-002 — ClusterRole grants wildcard access to all secrets
+# Risk: Any ServiceAccount bound to this role can read every secret in the
+#   cluster, including TLS keys, database passwords, and API tokens.
+#   Scope access using resourceNames to limit to specific secrets.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: secret-reader-overprivileged
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["*"]
+  # No resourceNames — grants access to ALL secrets in the cluster
+---
+# VIOLATION: DAEMON-001 + RUNTIME-009 — Docker socket mounted as hostPath
+# Risk: Mounting the Docker socket gives the container full control over the
+#   Docker daemon — equivalent to root on the host. An attacker who
+#   compromises this container can escape to the host.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ci-runner-insecure
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ci-runner
+  template:
+    metadata:
+      labels:
+        app: ci-runner
+    spec:
+      containers:
+      - name: runner
+        image: gitlab/gitlab-runner:latest
+        securityContext:
+          privileged: false
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+        resources:
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+        volumeMounts:
+        - name: docker-sock
+          mountPath: /var/run/docker.sock
+      volumes:
+      - name: docker-sock
+        hostPath:
+          path: /var/run/docker.sock
+          # DAEMON-001 FAIL: Docker socket exposed to container
+          # RUNTIME-009 FAIL: Sensitive host path mounted
+---
+# Note: The following controls trigger at the SCAN LEVEL (aggregation):
+#
+# NETWORK-001 WARN: No NetworkPolicy resource found in this file.
+#   Without a default-deny NetworkPolicy, all pods can communicate
+#   freely — any compromised pod can reach databases, internal APIs, etc.
+#
+# SUPPLY-001 WARN: No Kyverno ClusterPolicy with verifyImages found.
+#   Without admission-time image signature verification, unsigned or
+#   tampered images can be deployed to the cluster.
+#
+# MONITOR-001 WARN: No DaemonSet with a runtime detection agent found.
+#   Without Falco, Tetragon, or similar, container escapes, cryptominers,
+#   and lateral movement go undetected until damage is done.

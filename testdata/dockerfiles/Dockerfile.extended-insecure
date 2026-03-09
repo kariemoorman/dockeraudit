@@ -1,0 +1,35 @@
+# Extended insecure Dockerfile — covers controls not in Dockerfile.insecure
+# Controls tested: IMAGE-010, IMAGE-011, IMAGE-012, IMAGE-013, IMAGE-014,
+#                  IMAGE-015, IMAGE-016, RUNTIME-010, RUNTIME-011
+
+FROM ubuntu:18.04
+
+# IMAGE-011: Debug/dev tools in production image
+RUN apt-get update && apt-get install -y vim nano gdb strace tcpdump nmap net-tools
+
+# IMAGE-012: Package verification bypass
+RUN apt-get install --allow-unauthenticated -y some-package
+RUN pip install --trusted-host pypi.evil.com sketchy-lib
+
+# IMAGE-013: VOLUME targeting sensitive paths
+VOLUME ["/etc", "/root"]
+
+# IMAGE-014: ADD for local files instead of COPY
+ADD localfile.txt /app/localfile.txt
+ADD config.json /etc/config.json
+
+# IMAGE-016: Recursive COPY of entire build context
+COPY . .
+
+# RUNTIME-010: SSH daemon in CMD
+EXPOSE 22
+EXPOSE 80
+EXPOSE 443
+
+# RUNTIME-011: Privileged ports exposed
+EXPOSE 53/udp
+
+# No USER directive — IMAGE-005 (root by default)
+# Single FROM — IMAGE-015 (no multi-stage build)
+
+ENTRYPOINT ["/usr/sbin/sshd", "-D"]
