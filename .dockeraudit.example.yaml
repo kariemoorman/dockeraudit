@@ -1,0 +1,112 @@
+# .dockeraudit.example.yaml
+# Configuration reference for dockeraudit
+# Copy to .dockeraudit.yaml and customize for your environment
+
+# -----------------------------------------------------------------------------
+# Output Format
+# -----------------------------------------------------------------------------
+# Output format for scan results
+# Options: table, json, markdown, sarif, junit
+# Default: table
+format: table
+
+# -----------------------------------------------------------------------------
+# Exit Code Threshold
+# -----------------------------------------------------------------------------
+# Exit non-zero when findings meet or exceed this severity
+# Options: critical, high, medium, low, any
+# Default: high
+fail-on: high
+
+# -----------------------------------------------------------------------------
+# Verbose Output
+# -----------------------------------------------------------------------------
+# Print scan progress and per-check summaries to stderr
+# Default: false
+verbose: false
+
+# -----------------------------------------------------------------------------
+# Vulnerability Scanners
+# -----------------------------------------------------------------------------
+# External scanners to use for CVE detection
+# Options: trivy, snyk, none
+# Default: [trivy, snyk]
+scanner:
+  - trivy
+  - snyk
+
+# -----------------------------------------------------------------------------
+# Control Filtering
+# -----------------------------------------------------------------------------
+# Exclude specific control IDs from results
+# Findings matching these IDs are removed from output and do not count
+# toward the fail-on threshold
+exclude-check:
+  # - IMAGE-001    # Digest pinning
+  # - IMAGE-008    # EOL base image
+  # - RUNTIME-010  # SSH daemon
+
+# Include only specific control IDs (whitelist mode)
+# When set, only findings matching these IDs are included
+# Applied before exclude-check
+include-check:
+  # - RUNTIME-001
+  # - RUNTIME-002
+  # - IMAGE-002
+
+# -----------------------------------------------------------------------------
+# Custom EOL Database
+# -----------------------------------------------------------------------------
+# Path to custom end-of-life image definitions (JSON)
+# Overrides the built-in EOL database (67+ entries)
+# eol-file: custom-eol.json
+
+# -----------------------------------------------------------------------------
+# Example Profiles
+# -----------------------------------------------------------------------------
+
+# CI/CD (strict) - fail fast on critical issues
+# format: sarif
+# fail-on: critical
+# verbose: true
+
+# Development (relaxed) - informational scanning
+# format: table
+# fail-on: any
+# verbose: false
+# exclude-check:
+#   - IMAGE-001
+#   - IMAGE-008
+
+# Compliance Audit (full) - capture everything
+# format: json
+# fail-on: low
+# verbose: true
+
+# Kubernetes-focused scan
+# format: markdown
+# fail-on: high
+# include-check:
+#   - K8S-001
+#   - K8S-002
+#   - K8S-003
+#   - RUNTIME-001
+#   - RUNTIME-002
+#   - RUNTIME-003
+
+# Database security audit
+# format: json
+# fail-on: medium
+# include-check:
+#   - DB-IMAGE-001
+#   - DB-IMAGE-002
+#   - DB-K8S-001
+#   - DB-K8S-002
+#   - DB-K8S-003
+#   - DB-K8S-004
+#   - DB-K8S-005
+#   - DB-K8S-006
+#   - DB-K8S-007
+#   - DB-TF-001
+#   - DB-TF-002
+#   - DB-TF-003
