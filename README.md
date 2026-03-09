@@ -45,7 +45,6 @@
 dockeraudit image nginx:latest
 
 # Scan Dockerfiles and Compose files in a directory
-dockeraudit docker ./
 dockeraudit docker Dockerfile docker-compose.yml
 dockeraudit docker ./app/ ./infra/ --fail-on critical --scanner snyk
 dockeraudit docker ./ --format sarif -o results.sarif --scanner trivy
@@ -134,7 +133,7 @@ dockeraudit --version
 | `--fail-on` | `high` | Exit non-zero at severity threshold: `critical`, `high`, `medium`, `low`, `any` |
 | `--exclude-check` | | Exclude specific control IDs (e.g., `IMAGE-001,RUNTIME-010`) |
 | `--include-check` | | Include only specific control IDs |
-| `-s --scanner` | | Vulnerability scanners to use (trivy, snyk, none) (default [trivy,snyk]) |
+| `-s --scanner` | `[trivy,snyk]` | Vulnerability scanners to use (trivy, snyk, none)|
 
 ### `scan` Command Flags
 
@@ -207,7 +206,7 @@ Each control maps to compliance frameworks:
 - **SOC 2** trust criteria
 - **DISA CCI** identifiers
 
-Run `dockeraudit report controls` for the full list, or see [docs/controls.md](docs/controls.md) for detailed documentation.
+Run `dockeraudit report controls` for the full list.
 
 ## Output Formats
 
@@ -303,7 +302,7 @@ verbose: true                exclude-check:                 verbose: true
                                - IMAGE-008
 ```
 
-See [docs/configuration.md](docs/configuration.md) for the full reference including custom EOL file format.
+See [.dockeraudit.example.yaml](.dockeraudit.example.yaml) for the full reference.
 
 ## CI/CD Integration
 
@@ -332,14 +331,13 @@ See [docs/configuration.md](docs/configuration.md) for the full reference includ
     sarif_file: results.sarif
 ```
 
-See [examples/github-actions-scan.yml](examples/github-actions-scan.yml) for a complete workflow.
 
 ### GitLab CI
 
 ```yaml
 dockeraudit:
   stage: security
-  image: alpine:3.19
+  image: alpine:3.22
   before_script:
     - |
       curl -sSfL \
@@ -353,7 +351,6 @@ dockeraudit:
   allow_failure: true
 ```
 
-See [examples/gitlab-ci-scan.yml](examples/gitlab-ci-scan.yml) for a complete pipeline.
 
 ## Shell Completion
 
@@ -373,14 +370,7 @@ dockeraudit completion fish > ~/.config/fish/completions/dockeraudit.fish
 dockeraudit completion powershell > dockeraudit.ps1
 ```
 
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, coding standards, and how to submit changes.
-
-## Security Policy
-
-For reporting security vulnerabilities, see [SECURITY.md](SECURITY.md).
 
 ## License
 
-This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+This project is licensed under the BSD License. See [LICENSE](LICENSE) for details.
