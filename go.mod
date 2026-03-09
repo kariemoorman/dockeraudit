@@ -1,4 +1,4 @@
-module dockeraudit
+module github.com/kariemoorman/dockeraudit
 
 go 1.25
 
