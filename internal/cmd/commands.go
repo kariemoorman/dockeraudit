@@ -645,8 +645,9 @@ func newListControlsCmd() *cobra.Command {
 		Short: "List all hardening controls",
 		RunE: func(_ *cobra.Command, _ []string) error {
 			w := os.Stdout
-			//nolint:errcheck // stdout write; broken pipe not recoverable
+			//nolint:errcheck
 			fmt.Fprintln(w)
+			//nolint:errcheck // stdout write; broken pipe not recoverable
 			fmt.Fprintf(w, "%s%-14s %-12s %-50s %-10s %-12s %-12s %-20s%s\n",
 				blue, "ID", "Domain", "Title", "Severity", "Type", "CIS", "NIST 800-53", reset)
 			fmt.Fprintln(w, blue + strings.Repeat("─", 140) + reset) //nolint:errcheck
@@ -672,7 +673,7 @@ func newListControlsCmd() *cobra.Command {
 					c.Compliance.NIST80053)
 			}
 			fmt.Fprintln(w, blue + strings.Repeat("─", 140) + reset) //nolint:errcheck
-			fmt.Fprintln(w)
+			fmt.Fprintln(w) //nolint:errcheck
 			return nil
 		},
 	}
