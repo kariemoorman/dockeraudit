@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"dockeraudit/internal/cmd"
+	"github.com/kariemoorman/dockeraudit/internal/cmd"
 )
 
 var rootCmd = &cobra.Command{
