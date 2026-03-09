@@ -1,0 +1,25 @@
+# Intentionally insecure Dockerfile for testing
+FROM debian:9
+
+RUN apt-get update && apt-get install -y curl git
+
+# Secret in ENV
+ENV DB_PASSWORD=SuperSecretPassword123
+ENV AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
+
+# ADD with remote URL
+ADD https://example.com/setup.sh /setup.sh
+
+# World-writable permission
+RUN chmod 777 /tmp/data
+
+# SUID bit
+RUN chmod u+s /usr/bin/something
+
+# Pipe to shell
+RUN curl https://example.com/install.sh | bash
+
+# Running as root
+USER root
+
+CMD ["/bin/bash"]

@@ -1,0 +1,67 @@
+# INSECURE Weaviate deployment — for scanner FAIL case testing only
+# DO NOT deploy in production.
+# Expected scanner findings:
+#   FAIL DB-K8S-001: AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED=true
+#   FAIL SECRETS-003: OPENAI_APIKEY inline in ENV
+#   FAIL DB-K8S-003: Service type NodePort (DB port externally reachable)
+#   FAIL DB-K8S-004: emptyDir for vector data
+#   FAIL RUNTIME-001: no runAsNonRoot
+#   FAIL RUNTIME-012: no probes
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: weaviate-insecure
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: weaviate-insecure
+  template:
+    metadata:
+      labels:
+        app: weaviate-insecure
+    spec:
+      containers:
+      - name: weaviate
+        image: semitechnologies/weaviate:latest   # mutable tag
+        env:
+        - name: AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED
+          value: "true"                           # FAIL DB-K8S-001
+        - name: AUTHENTICATION_APIKEY_ENABLED
+          value: "false"
+        - name: OPENAI_APIKEY
+          value: "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  # FAIL SECRETS-003
+        - name: DEFAULT_VECTORIZER_MODULE
+          value: "text2vec-openai"
+        - name: PERSISTENCE_DATA_PATH
+          value: /var/lib/weaviate
+        securityContext:
+          runAsUser: 0                            # FAIL RUNTIME-001
+          privileged: false
+          allowPrivilegeEscalation: true          # FAIL RUNTIME-004
+          # No capabilities.drop                  # FAIL RUNTIME-003
+        ports:
+        - containerPort: 8080
+        # No livenessProbe                        # FAIL RUNTIME-012
+        # No readinessProbe                       # FAIL RUNTIME-012
+        volumeMounts:
+        - name: weaviate-data
+          mountPath: /var/lib/weaviate
+      volumes:
+      - name: weaviate-data
+        emptyDir: {}                              # FAIL DB-K8S-004
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: weaviate-insecure
+  namespace: default
+spec:
+  type: NodePort                                  # FAIL DB-K8S-003
+  selector:
+    app: weaviate-insecure
+  ports:
+  - port: 8080
+    targetPort: 8080
+    nodePort: 30080

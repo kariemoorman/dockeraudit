@@ -1,0 +1,18 @@
+# Secure Dockerfile for testing
+FROM golang:1.22-alpine@sha256:0b55ab82ac2a54a6f8f85ec8b943b9e470c39e32c4b2c33e303c8841b7e1ab1a AS builder
+
+RUN apk add --no-cache git ca-certificates
+
+WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 go build -o /bin/app
+
+FROM scratch
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=builder /bin/app /bin/app
+
+USER 65534
+
+ENTRYPOINT ["/bin/app"]

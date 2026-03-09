@@ -1,0 +1,166 @@
+# Hardened Neo4j 5 StatefulSet
+# Controls: RUNTIME-001, RUNTIME-003, RUNTIME-004, RUNTIME-005, RUNTIME-008, RUNTIME-012,
+#   DB-K8S-001, DB-K8S-002, DB-K8S-003, DB-K8S-004, DB-K8S-005, DB-K8S-007 (APOC SSRF)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: neo4j-credentials
+  namespace: production
+type: Opaque
+stringData:
+  neo4j-password: "REPLACE_WITH_STRONG_PASSWORD_VIA_SEALED_SECRETS_OR_ESO"
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: neo4j
+  namespace: production
+  labels:
+    app: neo4j
+    tier: database
+spec:
+  serviceName: neo4j
+  replicas: 1
+  selector:
+    matchLabels:
+      app: neo4j
+  template:
+    metadata:
+      labels:
+        app: neo4j
+        tier: database
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 7474
+        runAsGroup: 7474
+        fsGroup: 7474
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: neo4j
+        image: neo4j:5-community
+        env:
+        # Authentication: REQUIRED — never NEO4J_AUTH=none
+        - name: NEO4J_AUTH
+          valueFrom:
+            secretKeyRef:
+              name: neo4j-credentials
+              key: neo4j-password
+        - name: NEO4J_dbms_security_auth__enabled
+          value: "true"
+        # APOC SSRF hardening: restrict URL/file loading
+        - name: NEO4J_apoc_import_file_enabled
+          value: "false"
+        - name: NEO4J_apoc_import_file_use__neo4j__config
+          value: "true"
+        - name: NEO4J_apoc_import_file_allow__read__from__filesystem
+          value: "false"
+        - name: NEO4J_dbms_security_procedures_unrestricted
+          value: ""
+        # Memory configuration
+        - name: NEO4J_dbms_memory_heap_initial__size
+          value: "512m"
+        - name: NEO4J_dbms_memory_heap_max__size
+          value: "2g"
+        - name: NEO4J_dbms_memory_pagecache_size
+          value: "512m"
+        ports:
+        - containerPort: 7687
+          protocol: TCP
+          name: bolt
+        # Port 7474 (HTTP Browser) intentionally not exposed in production
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 7474
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          privileged: false
+          capabilities:
+            drop: [ALL]
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 7474
+          initialDelaySeconds: 60
+          periodSeconds: 20
+          failureThreshold: 5
+          timeoutSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 7474
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          failureThreshold: 3
+          timeoutSeconds: 5
+        volumeMounts:
+        - name: neo4j-data
+          mountPath: /data
+        - name: neo4j-logs
+          mountPath: /logs
+        - name: neo4j-import
+          mountPath: /import
+          readOnly: true
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: neo4j-logs
+        emptyDir: {}
+      - name: neo4j-import
+        emptyDir: {}
+      - name: tmp
+        emptyDir: {}
+  volumeClaimTemplates:
+  - metadata:
+      name: neo4j-data
+    spec:
+      accessModes: [ReadWriteOnce]
+      storageClassName: encrypted-ssd
+      resources:
+        requests:
+          storage: 50Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: neo4j
+  namespace: production
+spec:
+  type: ClusterIP
+  selector:
+    app: neo4j
+  ports:
+  - name: bolt
+    port: 7687
+    targetPort: 7687
+    protocol: TCP
+  # Note: 7474 (HTTP/Browser) intentionally omitted — admin UI not exposed in production
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: neo4j-isolate
+  namespace: production
+spec:
+  podSelector:
+    matchLabels:
+      app: neo4j
+  policyTypes: [Ingress, Egress]
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          role: backend
+    ports:
+    - port: 7687
+  egress: []
+  # Egress blocked: prevents APOC apoc.load.json() SSRF to 169.254.169.254 and internal services

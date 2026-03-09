@@ -1,0 +1,310 @@
+# Kyverno ClusterPolicies for Database Container Security
+# Covers TASK-1.7: Kyverno alternatives for critical controls
+# Controls: RUNTIME-010 (no sshd), RUNTIME-011 (no priv ports), RUNTIME-012 (probes),
+#   DB-K8S-001 (no auth-disabling ENV), DB-K8S-003 (ClusterIP only for DB services),
+#   DB-K8S-004 (no emptyDir for DB data), 4.8 (no host namespaces), 7.1 (image signing)
+---
+# Policy 1: Deny privileged ports in containers
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: deny-privileged-ports
+  annotations:
+    policies.kyverno.io/title: Deny Privileged Ports
+    policies.kyverno.io/category: Runtime Security
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/description: >-
+      Containers must not bind to ports below 1024. Privileged ports require
+      CAP_NET_BIND_SERVICE and conflict with --cap-drop ALL enforcement.
+      CIS 5.8, DISA CCI-001762.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+  - name: deny-ports-below-1024
+    match:
+      any:
+      - resources:
+          kinds: [Pod]
+    validate:
+      message: "Container ports below 1024 are not permitted (CIS 5.8 / CCI-001762). Use ports >= 1024 and map externally via Service."
+      foreach:
+      - list: "request.object.spec.containers"
+        foreach:
+        - list: "element.ports"
+          deny:
+            conditions:
+              any:
+              - key: "{{ element.containerPort }}"
+                operator: LessThan
+                value: 1024
+---
+# Policy 2: Require liveness and readiness probes
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-pod-probes
+  annotations:
+    policies.kyverno.io/title: Require Liveness and Readiness Probes
+    policies.kyverno.io/category: Availability
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/description: >-
+      All containers must define liveness and readiness probes to enable
+      Kubernetes to detect and recover from application failures.
+      DISA CCI-002385, NIST CP-10.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+  - name: require-liveness-probe
+    match:
+      any:
+      - resources:
+          kinds: [Pod]
+    exclude:
+      any:
+      - resources:
+          namespaces: [kube-system, kube-public, kube-node-lease]
+    validate:
+      message: "Container '{{ element.name }}' must define a livenessProbe (CCI-002385)."
+      foreach:
+      - list: "request.object.spec.containers"
+        deny:
+          conditions:
+            all:
+            - key: "{{ element.livenessProbe | length(@) }}"
+              operator: Equals
+              value: 0
+  - name: require-readiness-probe
+    match:
+      any:
+      - resources:
+          kinds: [Pod]
+    exclude:
+      any:
+      - resources:
+          namespaces: [kube-system, kube-public, kube-node-lease]
+    validate:
+      message: "Container '{{ element.name }}' must define a readinessProbe (CCI-002385)."
+      foreach:
+      - list: "request.object.spec.containers"
+        deny:
+          conditions:
+            all:
+            - key: "{{ element.readinessProbe | length(@) }}"
+              operator: Equals
+              value: 0
+---
+# Policy 3: Deny host namespace sharing
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: deny-host-namespaces
+  annotations:
+    policies.kyverno.io/title: Deny Host Namespace Sharing
+    policies.kyverno.io/category: Pod Security
+    policies.kyverno.io/severity: critical
+    policies.kyverno.io/description: >-
+      Pods must not share host PID, IPC, or network namespaces.
+      CIS 5.10/5.16/5.17/5.21, DISA CCI-001090.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+  - name: deny-host-pid
+    match:
+      any:
+      - resources:
+          kinds: [Pod]
+    validate:
+      message: "hostPID must not be true (CIS 5.16 / CCI-001090)."
+      deny:
+        conditions:
+          any:
+          - key: "{{ request.object.spec.hostPID }}"
+            operator: Equals
+            value: true
+  - name: deny-host-ipc
+    match:
+      any:
+      - resources:
+          kinds: [Pod]
+    validate:
+      message: "hostIPC must not be true (CIS 5.17 / CCI-001090)."
+      deny:
+        conditions:
+          any:
+          - key: "{{ request.object.spec.hostIPC }}"
+            operator: Equals
+            value: true
+  - name: deny-host-network
+    match:
+      any:
+      - resources:
+          kinds: [Pod]
+    exclude:
+      any:
+      - resources:
+          namespaces: [kube-system]   # CNI plugins may require hostNetwork
+    validate:
+      message: "hostNetwork must not be true (CIS 5.21 / CCI-001090)."
+      deny:
+        conditions:
+          any:
+          - key: "{{ request.object.spec.hostNetwork }}"
+            operator: Equals
+            value: true
+---
+# Policy 4: Deny database authentication-disabling ENV vars
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: deny-db-auth-disabled-env
+  annotations:
+    policies.kyverno.io/title: Deny Database Authentication-Disabling ENV
+    policies.kyverno.io/category: Database Security
+    policies.kyverno.io/severity: critical
+    policies.kyverno.io/description: >-
+      Database containers must not set environment variables that disable
+      authentication (e.g., POSTGRES_HOST_AUTH_METHOD=trust, --noauth flags,
+      NEO4J_AUTH=none, AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED=true).
+      DB-K8S-001, DISA CCI-002235.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+  - name: deny-postgres-trust-auth
+    match:
+      any:
+      - resources:
+          kinds: [Pod]
+    validate:
+      message: "POSTGRES_HOST_AUTH_METHOD=trust disables PostgreSQL authentication (DB-K8S-001 / CCI-002235)."
+      foreach:
+      - list: "request.object.spec.containers"
+        foreach:
+        - list: "element.env"
+          deny:
+            conditions:
+              all:
+              - key: "{{ element.name }}"
+                operator: Equals
+                value: POSTGRES_HOST_AUTH_METHOD
+              - key: "{{ element.value }}"
+                operator: Equals
+                value: trust
+  - name: deny-weaviate-anonymous-access
+    match:
+      any:
+      - resources:
+          kinds: [Pod]
+    validate:
+      message: "AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED=true enables unauthenticated Weaviate access (DB-K8S-001)."
+      foreach:
+      - list: "request.object.spec.containers"
+        foreach:
+        - list: "element.env"
+          deny:
+            conditions:
+              all:
+              - key: "{{ element.name }}"
+                operator: Equals
+                value: AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED
+              - key: "{{ element.value }}"
+                operator: Equals
+                value: "true"
+  - name: deny-neo4j-auth-none
+    match:
+      any:
+      - resources:
+          kinds: [Pod]
+    validate:
+      message: "NEO4J_AUTH=none disables Neo4j authentication (DB-K8S-001)."
+      foreach:
+      - list: "request.object.spec.containers"
+        foreach:
+        - list: "element.env"
+          deny:
+            conditions:
+              all:
+              - key: "{{ element.name }}"
+                operator: Equals
+                value: NEO4J_AUTH
+              - key: "{{ element.value }}"
+                operator: Equals
+                value: none
+---
+# Policy 5: Require image digest pinning (no mutable tags)
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-image-digest
+  annotations:
+    policies.kyverno.io/title: Require Image Digest Pinning
+    policies.kyverno.io/category: Supply Chain
+    policies.kyverno.io/severity: critical
+    policies.kyverno.io/description: >-
+      All container images must be pinned by digest (sha256:...) to prevent
+      silent image replacement via tag mutation.
+      CIS 4.1, DISA CCI-001762, NIST CM-14.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+  - name: require-digest
+    match:
+      any:
+      - resources:
+          kinds: [Pod]
+    exclude:
+      any:
+      - resources:
+          namespaces: [kube-system, kube-public]
+    validate:
+      message: "Image '{{ element.image }}' must be pinned by digest (@sha256:...). Mutable tags are not permitted (CIS 4.1 / CCI-001762)."
+      foreach:
+      - list: "request.object.spec.containers"
+        deny:
+          conditions:
+            all:
+            - key: "{{ element.image }}"
+              operator: NotContains
+              value: "@sha256:"
+---
+# Policy 6: Verify image signatures (Cosign)
+# Requires Cosign public key to be populated
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: verify-image-signatures
+  annotations:
+    policies.kyverno.io/title: Verify Image Signatures
+    policies.kyverno.io/category: Supply Chain
+    policies.kyverno.io/severity: critical
+    policies.kyverno.io/description: >-
+      All images must be signed with the organization's Cosign key.
+      CIS 4.5/4.12, DISA CCI-001762, NIST SI-7.
+spec:
+  validationFailureAction: Enforce
+  background: false
+  rules:
+  - name: verify-signature
+    match:
+      any:
+      - resources:
+          kinds: [Pod]
+    exclude:
+      any:
+      - resources:
+          namespaces: [kube-system, kube-public, kube-node-lease]
+    verifyImages:
+    - imageReferences:
+      - "registry.example.com/*"         # Replace with your registry
+      attestors:
+      - count: 1
+        entries:
+        - keys:
+            publicKeys: |-
+              -----BEGIN PUBLIC KEY-----
+              REPLACE_WITH_YOUR_COSIGN_PUBLIC_KEY
+              -----END PUBLIC KEY-----

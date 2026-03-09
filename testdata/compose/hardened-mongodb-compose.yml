@@ -1,0 +1,83 @@
+# Hardened MongoDB 7 Docker Compose
+# Controls: non-root, read-only FS, cap drop ALL, no-new-privileges,
+#   auth required (--auth), TLS required, secrets via file, resource limits, healthcheck
+# Usage:
+#   1. Place TLS cert+key PEM: ./secrets/mongo-tls.pem
+#   2. echo -n "adminuser" > ./secrets/mongo-user && chmod 400 ./secrets/mongo-user
+#   3. echo -n "strongpassword" > ./secrets/mongo-password && chmod 400 ./secrets/mongo-password
+#   4. docker compose -f hardened-mongodb-compose.yml up -d
+
+version: "3.9"
+
+secrets:
+  mongo-user:
+    file: ./secrets/mongo-user
+  mongo-password:
+    file: ./secrets/mongo-password
+  mongo-tls:
+    file: ./secrets/mongo-tls.pem
+
+volumes:
+  mongo-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /data/mongodb
+
+networks:
+  db-net:
+    driver: bridge
+    internal: true
+
+services:
+  mongodb:
+    image: mongo:7@sha256:81ed620b45935fb49704010b75d3fa73df547f71323cfdba49323a64412253a4
+    restart: unless-stopped
+    user: "999:999"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:mode=1777,size=64m
+    command:
+      - mongod
+      - "--auth"
+      - "--bind_ip_all"
+      - "--tlsMode"
+      - "requireTLS"
+      - "--tlsCertificateKeyFile"
+      - "/run/secrets/mongo-tls"
+    secrets:
+      - mongo-user
+      - mongo-password
+      - mongo-tls
+    environment:
+      MONGO_INITDB_ROOT_USERNAME_FILE: /run/secrets/mongo-user
+      MONGO_INITDB_ROOT_PASSWORD_FILE: /run/secrets/mongo-password
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - db-net
+    ports: []
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --eval \"db.adminCommand('ping')\" --quiet"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+          cpus: "1.0"
+        reservations:
+          memory: 512m
+          cpus: "0.25"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"

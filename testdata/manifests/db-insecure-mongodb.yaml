@@ -1,0 +1,75 @@
+# INSECURE MongoDB deployment — for scanner FAIL case testing only
+# DO NOT deploy in production.
+# Expected scanner findings:
+#   FAIL SECRETS-001: password in plain ENV
+#   FAIL DB-K8S-001: --noauth flag disables authentication entirely
+#   FAIL DB-K8S-002: no auth explicitly configured (MONGO_INITDB_ROOT_PASSWORD missing _FILE)
+#   FAIL DB-K8S-003: Service type NodePort (DB port externally reachable)
+#   FAIL DB-K8S-004: emptyDir used for data directory
+#   FAIL DB-K8S-005: no fsGroup
+#   FAIL DB-K8S-006: DSN with credentials in pod annotation
+#   FAIL RUNTIME-001: runAsUser 0 (root)
+#   FAIL RUNTIME-003: no capabilities drop
+#   FAIL RUNTIME-004: allowPrivilegeEscalation not false
+#   FAIL RUNTIME-012: no liveness/readiness probes
+#   FAIL IMAGE-001: mutable tag (mongo:latest)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongodb-insecure
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mongodb-insecure
+  template:
+    metadata:
+      labels:
+        app: mongodb-insecure
+      annotations:
+        db.dsn: "mongodb://admin:plaintext_password@mongodb:27017/prod"  # FAIL DB-K8S-006
+    spec:
+      # No securityContext — FAIL DB-K8S-005 (no fsGroup)
+      containers:
+      - name: mongodb
+        image: mongo:latest                         # FAIL IMAGE-001: mutable tag
+        command:
+        - mongod
+        - "--noauth"                                # FAIL DB-K8S-001: auth completely disabled
+        - "--bind_ip_all"
+        env:
+        - name: MONGO_INITDB_ROOT_USERNAME
+          value: "admin"
+        - name: MONGO_INITDB_ROOT_PASSWORD
+          value: "plaintext_password"              # FAIL SECRETS-001
+        securityContext:
+          runAsUser: 0                             # FAIL RUNTIME-001
+          allowPrivilegeEscalation: true           # FAIL RUNTIME-004
+          readOnlyRootFilesystem: false
+          # No capabilities.drop                   # FAIL RUNTIME-003
+        ports:
+        - containerPort: 27017
+        # No livenessProbe                         # FAIL RUNTIME-012
+        # No readinessProbe                        # FAIL RUNTIME-012
+        # No resources                             # FAIL RUNTIME-006, RUNTIME-007
+        volumeMounts:
+        - name: mongo-data
+          mountPath: /data/db
+      volumes:
+      - name: mongo-data
+        emptyDir: {}                               # FAIL DB-K8S-004
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb-insecure
+  namespace: default
+spec:
+  type: NodePort                                   # FAIL DB-K8S-003: DB port reachable on every node
+  selector:
+    app: mongodb-insecure
+  ports:
+  - port: 27017
+    targetPort: 27017
+    nodePort: 30017

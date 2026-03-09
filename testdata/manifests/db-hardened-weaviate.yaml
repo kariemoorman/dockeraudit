@@ -1,0 +1,179 @@
+# Hardened Weaviate 1.24 StatefulSet
+# Controls: RUNTIME-001, RUNTIME-003, RUNTIME-004, RUNTIME-005, RUNTIME-008, RUNTIME-012,
+#   DB-K8S-001 (no anonymous access), DB-K8S-002 (API key auth), DB-K8S-003 (ClusterIP),
+#   DB-K8S-004 (PVC), DB-K8S-005 (fsGroup), SECRETS-001, SECRETS-003 (no vectorizer key in ENV)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: weaviate-credentials
+  namespace: production
+type: Opaque
+stringData:
+  weaviate-api-keys: "REPLACE_WITH_COMMA_SEPARATED_API_KEYS_VIA_SEALED_SECRETS"
+  openai-api-key: "REPLACE_WITH_OPENAI_KEY_IF_USING_OPENAI_MODULE"
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: weaviate
+  namespace: production
+  labels:
+    app: weaviate
+    tier: database
+spec:
+  serviceName: weaviate
+  replicas: 1
+  selector:
+    matchLabels:
+      app: weaviate
+  template:
+    metadata:
+      labels:
+        app: weaviate
+        tier: database
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: weaviate
+        image: semitechnologies/weaviate:1.24.1
+        env:
+        # Authentication: anonymous access DISABLED
+        - name: AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED
+          value: "false"
+        # API key authentication enabled; keys read from file
+        - name: AUTHENTICATION_APIKEY_ENABLED
+          value: "true"
+        - name: AUTHENTICATION_APIKEY_ALLOWED_KEYS_FILE
+          value: /run/secrets/weaviate-api-keys
+        # Authorization
+        - name: AUTHORIZATION_ADMINLIST_ENABLED
+          value: "true"
+        # Data path
+        - name: PERSISTENCE_DATA_PATH
+          value: /var/lib/weaviate
+        # Vectorizer: specify explicitly, never default open
+        - name: DEFAULT_VECTORIZER_MODULE
+          value: "none"
+        # Enable only required modules; API key read from file — NOT inline ENV
+        - name: ENABLE_MODULES
+          value: ""
+        # OIDC (optional — prefer APIKEY for simplicity)
+        # - name: AUTHENTICATION_OIDC_ENABLED
+        #   value: "false"
+        # Cluster config
+        - name: CLUSTER_HOSTNAME
+          value: "weaviate-0"
+        ports:
+        - containerPort: 8080
+          protocol: TCP
+          name: http
+        - containerPort: 50051
+          protocol: TCP
+          name: grpc
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          privileged: false
+          capabilities:
+            drop: [ALL]
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+        livenessProbe:
+          httpGet:
+            path: /v1/.well-known/live
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 15
+          failureThreshold: 5
+          timeoutSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /v1/.well-known/ready
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          failureThreshold: 3
+          timeoutSeconds: 5
+        volumeMounts:
+        - name: weaviate-data
+          mountPath: /var/lib/weaviate
+        - name: weaviate-secret
+          mountPath: /run/secrets
+          readOnly: true
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: weaviate-secret
+        secret:
+          secretName: weaviate-credentials
+          defaultMode: 0400
+      - name: tmp
+        emptyDir: {}
+  volumeClaimTemplates:
+  - metadata:
+      name: weaviate-data
+    spec:
+      accessModes: [ReadWriteOnce]
+      storageClassName: encrypted-ssd
+      resources:
+        requests:
+          storage: 50Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: weaviate
+  namespace: production
+spec:
+  type: ClusterIP
+  selector:
+    app: weaviate
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+  - name: grpc
+    port: 50051
+    targetPort: 50051
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: weaviate-isolate
+  namespace: production
+spec:
+  podSelector:
+    matchLabels:
+      app: weaviate
+  policyTypes: [Ingress, Egress]
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          role: backend
+    ports:
+    - port: 8080
+    - port: 50051
+  egress:
+  # Allow egress only to vectorizer inference services if needed
+  # Remove this egress block if DEFAULT_VECTORIZER_MODULE=none
+  - to:
+    - podSelector:
+        matchLabels:
+          role: inference
+    ports:
+    - port: 8080

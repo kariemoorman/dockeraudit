@@ -1,0 +1,49 @@
+version: 2
+
+project_name: dockeraudit
+
+before:
+  hooks:
+    - go mod verify
+    - go vet ./...
+
+builds:
+  - id: dockeraudit
+    main: ./cmd/dockeraudit
+    binary: dockeraudit
+    ldflags:
+      - -s -w -X main.Version={{.Version}}
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - id: dockeraudit
+    name_template: "dockeraudit_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - README.md
+      - LICENSE
+
+checksum:
+  name_template: "dockeraudit_{{ .Version }}_checksums.txt"
+  algorithm: sha256
+
+release:
+  github:
+    owner: "{{ if .Env.GITHUB_REPOSITORY_OWNER }}{{ .Env.GITHUB_REPOSITORY_OWNER }}{{ else }}kariemoorman{{ end }}"
+    name: dockeraudit_private
+  draft: false
+  prerelease: auto
+  name_template: "v{{.Version}}"
+
+changelog:
+  disable: true

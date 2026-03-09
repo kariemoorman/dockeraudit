@@ -1,0 +1,161 @@
+# Extended insecure K8s manifests — covers controls not in test-pods.yaml
+# Controls tested: RUNTIME-008, RUNTIME-011, RUNTIME-013, RUNTIME-014,
+#   RUNTIME-015, K8S-001, K8S-002, IMAGE-008, DB-K8S-001, DB-K8S-002,
+#   DB-K8S-004, DB-K8S-006, DB-K8S-007
+---
+# Deployment in default namespace, no anti-affinity, no automount override
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: legacy-api
+  namespace: default
+  annotations:
+    config/database-url: "postgresql://admin:s3cretP4ss@db.prod:5432/myapp"
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: legacy-api
+  template:
+    metadata:
+      labels:
+        app: legacy-api
+      annotations:
+        backup/credentials: "apikey=AKIA1234567890ABCDEF"
+    spec:
+      # No automountServiceAccountToken: false — RUNTIME-014 WARN
+      # No anti-affinity or topologySpreadConstraints — K8S-002 WARN
+      containers:
+      - name: api
+        image: python:3.7
+        # IMAGE-008 FAIL: Python 3.7 EOL
+        ports:
+        - containerPort: 443
+          # RUNTIME-011 FAIL: privileged port
+        - containerPort: 80
+          # RUNTIME-011 FAIL: privileged port
+        securityContext:
+          privileged: false
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          capabilities:
+            drop: ["ALL"]
+        resources:
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+        # No seccomp — RUNTIME-008 WARN
+        # No AppArmor/SELinux — RUNTIME-013 WARN
+---
+# Redis with emptyDir data volume and auth disabled
+apiVersion: v1
+kind: Pod
+metadata:
+  name: redis-insecure
+  namespace: default
+spec:
+  containers:
+  - name: redis
+    image: redis:6.0
+    # IMAGE-008 FAIL: Redis 6.0 EOL
+    command: ["redis-server", "--protected-mode", "no"]
+    # DB-K8S-001 FAIL: --protected-mode no
+    securityContext:
+      readOnlyRootFilesystem: false
+      # RUNTIME-005 FAIL: writable rootfs on Redis (escalated to CRITICAL)
+      capabilities:
+        drop: ["ALL"]
+      allowPrivilegeEscalation: false
+    resources:
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+      requests:
+        memory: "256Mi"
+        cpu: "100m"
+    volumeMounts:
+    - name: data
+      mountPath: /data
+  volumes:
+  - name: data
+    emptyDir: {}
+    # DB-K8S-004 FAIL: data dir on emptyDir
+---
+# Neo4j with APOC and no URL restrictions
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: neo4j-insecure
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: neo4j
+  template:
+    metadata:
+      labels:
+        app: neo4j
+    spec:
+      containers:
+      - name: neo4j
+        image: neo4j:5.15
+        env:
+        - name: NEO4J_AUTH
+          value: "none"
+          # DB-K8S-001 FAIL: auth disabled
+        - name: NEO4J_PLUGINS
+          value: '["apoc"]'
+          # DB-K8S-007 FAIL: APOC without restrictions
+        securityContext:
+          capabilities:
+            drop: ["ALL"]
+          allowPrivilegeEscalation: false
+        resources:
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+---
+# Chroma without auth (DB-K8S-002)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: chroma-no-auth
+  namespace: default
+spec:
+  containers:
+  - name: chroma
+    image: chromadb/chroma:0.4.22
+    # DB-K8S-002 FAIL: no CHROMA_SERVER_AUTH_PROVIDER
+    securityContext:
+      capabilities:
+        drop: ["ALL"]
+      allowPrivilegeEscalation: false
+    resources:
+      limits:
+        memory: "1Gi"
+        cpu: "500m"
+      requests:
+        memory: "256Mi"
+        cpu: "100m"
+---
+# Service exposing database ports via LoadBalancer
+apiVersion: v1
+kind: Service
+metadata:
+  name: db-external
+  namespace: default
+spec:
+  type: LoadBalancer
+  selector:
+    app: postgres
+  ports:
+  - port: 5432
+    targetPort: 5432
+    # DB-K8S-003 FAIL: PostgreSQL on LoadBalancer

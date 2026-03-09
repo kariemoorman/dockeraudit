@@ -1,0 +1,42 @@
+# Extended insecure Docker Compose — covers controls not in insecure-compose.yml
+# Controls tested: RUNTIME-003 (FAIL), RUNTIME-004 (FAIL), RUNTIME-005 (WARN),
+#   RUNTIME-007 (FAIL), RUNTIME-008 (FAIL), RUNTIME-012 (FAIL),
+#   RUNTIME-015 (WARN), RUNTIME-016 (WARN), IMAGE-008 (FAIL),
+#   DB-IMAGE-002 (FAIL), SECRETS-003 (FAIL), DAEMON-004 (WARN)
+
+services:
+  legacy-app:
+    image: python:3.6
+    # No cap_drop — RUNTIME-003 FAIL
+    # No no-new-privileges — RUNTIME-004 FAIL
+    # No read_only — RUNTIME-005 WARN
+    # No resource limits — RUNTIME-007 FAIL
+    security_opt:
+      - seccomp=unconfined
+    # No healthcheck — RUNTIME-012 FAIL
+    # No ulimits — RUNTIME-015 WARN
+    restart: always
+    # Uncapped restart — RUNTIME-016 WARN
+    environment:
+      OPENAI_API_KEY: sk-abcdefghijklmnopqrstuvwxyz123456
+      DOCKER_CONTENT_TRUST: "0"
+      # VIOLATION: DAEMON-004 — Content trust disabled; unsigned images can be pulled
+    ports:
+      - "5000:5000"
+
+  redis-insecure:
+    image: redis:5
+    command: ["redis-server", "--protected-mode", "no"]
+    # DB-IMAGE-002 FAIL: --protected-mode no
+    # IMAGE-008 FAIL: Redis 5 EOL
+    # No ulimits — RUNTIME-015 WARN
+    restart: unless-stopped
+    # RUNTIME-016 WARN: no retry cap
+
+  mysql-insecure:
+    image: mysql:5.7
+    command: ["mysqld", "--skip-grant-tables"]
+    # DB-IMAGE-002 FAIL: --skip-grant-tables
+    # IMAGE-008 FAIL: MySQL 5.7 EOL
+    environment:
+      MYSQL_ROOT_PASSWORD: root123

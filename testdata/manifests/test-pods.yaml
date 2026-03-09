@@ -1,0 +1,82 @@
+# testdata/manifests/bad-pod.yaml
+# This file intentionally contains hardening violations for testing.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: insecure-app
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: insecure-app
+  template:
+    metadata:
+      labels:
+        app: insecure-app
+    spec:
+      hostPID: true          # VIOLATION: RUNTIME-006
+      hostNetwork: true      # VIOLATION: RUNTIME-006
+      containers:
+      - name: app
+        image: nginx:latest  # VIOLATION: IMAGE-001 (no digest)
+        securityContext:
+          privileged: true                 # VIOLATION: RUNTIME-002
+          runAsUser: 0                     # VIOLATION: RUNTIME-001
+          allowPrivilegeEscalation: true   # VIOLATION: RUNTIME-004
+          # readOnlyRootFilesystem not set  # VIOLATION: RUNTIME-005
+          # capabilities not set           # VIOLATION: RUNTIME-003
+        env:
+        - name: DB_PASSWORD              # VIOLATION: IMAGE-002
+          value: "super-secret-password"
+        - name: AWS_SECRET_ACCESS_KEY    # VIOLATION: IMAGE-002
+          value: "AKIAIOSFODNN7EXAMPLE"
+        # resources not set               # VIOLATION: RUNTIME-007
+        volumes:
+        - name: docker-sock
+          hostPath:
+            path: /var/run/docker.sock   # VIOLATION: DAEMON-001 / RUNTIME-009
+---
+# Good pod — all controls satisfied
+apiVersion: v1
+kind: Pod
+metadata:
+  name: hardened-app
+  namespace: production
+spec:
+  hostPID: false
+  hostIPC: false
+  hostNetwork: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1001
+    runAsGroup: 1001
+    fsGroup: 1001
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+  - name: app
+    image: registry.example.com/myapp@sha256:abc123def456abc123def456abc123def456abc123def456abc123def456abc1
+    securityContext:
+      privileged: false
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      runAsNonRoot: true
+      runAsUser: 1001
+      capabilities:
+        drop:
+        - ALL
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "256Mi"
+        cpu: "500m"
+    volumeMounts:
+    - name: tmp
+      mountPath: /tmp
+  volumes:
+  - name: tmp
+    emptyDir: {}
