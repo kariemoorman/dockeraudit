@@ -74,8 +74,8 @@ func (r *Reporter) renderTable(results []*types.ScanResult) error {
 	out := r.Output
 
 	// Pre-compute reusable structural chrome (all blue when color is enabled).
-	divider    := r.blue(strings.Repeat("─", 120))
-	doubleLine := r.blue(strings.Repeat("═", 120))
+	divider    := r.blue(strings.Repeat("─", 150))
+	doubleLine := r.blue(strings.Repeat("═", 150))
 
 	// Header: each column title is blue+underlined and padded with padRight so that
 	// ANSI bytes do not inflate the visible width (same technique as data rows).
