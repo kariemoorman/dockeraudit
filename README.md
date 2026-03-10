@@ -45,9 +45,7 @@
 dockeraudit image nginx:latest
 
 # Scan Dockerfiles and Compose files in a directory
-dockeraudit docker Dockerfile docker-compose.yml
-dockeraudit docker ./app/ ./infra/ --fail-on critical --scanner snyk
-dockeraudit docker ./ --format sarif -o results.sarif --scanner trivy
+dockeraudit docker Dockerfile docker-compose.yml --scanner trivy
 
 # Scan Kubernetes manifests
 dockeraudit k8s ./manifests/
@@ -208,55 +206,6 @@ Each control maps to compliance frameworks:
 
 Run `dockeraudit report controls` for the full list.
 
-## Output Formats
-
-### Table (default)
-
-Human-readable colored table output to the terminal.
-
-### JSON
-
-Machine-readable JSON with all findings, status, severity, control metadata, and compliance mappings.
-
-```bash
-dockeraudit image nginx:latest -f json -o results.json
-```
-
-### SARIF
-
-Static Analysis Results Interchange Format for integration with GitHub Code Scanning, Azure DevOps, and other SARIF-compatible tools.
-
-```bash
-dockeraudit scan --images myapp:latest -f sarif -o results.sarif
-```
-
-### JUnit
-
-JUnit XML format for CI/CD test reporting in Jenkins, GitLab CI, and similar systems.
-
-```bash
-dockeraudit image nginx:latest -f junit -o results.xml
-```
-
-### Markdown
-
-Markdown-formatted report suitable for pull request comments or documentation.
-
-```bash
-dockeraudit k8s ./manifests/ -f markdown -o report.md
-```
-
-## Auto-Saved Reports
-
-Every scan automatically saves a timestamped report to the `scans/` directory:
-
-```
-scans/dockerAudit_report_docker_20260304_063938.txt
-scans/dockerAudit_report_k8s_20260304_064027.txt
-scans/dockerAudit_report_terraform_20260304_064119.txt
-```
-
-This provides an audit trail without requiring explicit `--output` flags. When `--output` is specified, auto-save is skipped.
 
 ## Configuration File
 
