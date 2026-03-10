@@ -7,7 +7,7 @@
 
 <p align="center">
   <a href="https://github.com/kariemoorman/dockeraudit/LICENSE">
-    <img src="https://img.shields.io/badge/License-BSD-red.svg" alt="License">
+    <img src="https://img.shields.io/badge/License-BSL-blue.svg" alt="License">
   </a>
   <a href="https://github.com/kariemoorman/dockeraudit/releases">
     <img src="https://img.shields.io/github/v/release/kariemoorman/dockeraudit?cacheSeconds=300" alt="Release">
