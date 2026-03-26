@@ -15,6 +15,9 @@
   <a href="https://github.com/kariemoorman/dockeraudit/actions/workflows/ci.yml/badge.svg">
     <img src="https://github.com/kariemoorman/dockeraudit/actions/workflows/ci.yml/badge.svg" alt="Tests">
   </a>
+  <a href="https://github.com/kariemoorman/dockeraudit/actions/workflows/security.yml/badge.svg">
+    <img src="https://github.com/kariemoorman/dockeraudit/actions/workflows/security.yml/badge.svg" alt="Security">
+  </a>
 </p>
 
 
