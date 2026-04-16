@@ -81,11 +81,13 @@ type seccompProfile struct {
 	Type string `json:"type" yaml:"type"`
 }
 
-type probe struct {
-	Exec      *struct{ Command []string `json:"command" yaml:"command"` } `json:"exec" yaml:"exec"`
-	HTTPGet   *struct{ Path string `json:"path" yaml:"path"` }           `json:"httpGet" yaml:"httpGet"`
-	TCPSocket *struct{ Port int32 `json:"port" yaml:"port"` }            `json:"tcpSocket" yaml:"tcpSocket"`
-}
+// probe is intentionally empty — the scanner only checks whether a container
+// declares a probe (via nil-pointer check on container.LivenessProbe /
+// container.ReadinessProbe), it never reads the probe's inner fields. Leaving
+// the struct empty also avoids IntOrString parse errors on sub-fields like
+// tcpSocket.port or httpGet.port, which Kubernetes allows as either an int
+// port number or a named port string.
+type probe struct{}
 
 type containerPort struct {
 	ContainerPort int32  `json:"containerPort" yaml:"containerPort"`
@@ -168,10 +170,13 @@ type serviceSpec struct {
 }
 
 type servicePort struct {
-	Port       int32  `json:"port" yaml:"port"`
-	TargetPort int32  `json:"targetPort" yaml:"targetPort"`
-	NodePort   int32  `json:"nodePort" yaml:"nodePort"`
-	Protocol   string `json:"protocol" yaml:"protocol"`
+	Port     int32  `json:"port" yaml:"port"`
+	NodePort int32  `json:"nodePort" yaml:"nodePort"`
+	Protocol string `json:"protocol" yaml:"protocol"`
+	// targetPort is deliberately omitted — Kubernetes allows it to be either
+	// an int port number or a named port string (IntOrString), and the
+	// scanner doesn't use it. Declaring it as int32 would cause json
+	// unmarshal to fail on Services with named ports like `targetPort: http`.
 }
 
 // Scan scans YAML/JSON manifest files for security misconfigurations.
