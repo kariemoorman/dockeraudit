@@ -10,7 +10,7 @@ import (
 	"github.com/kariemoorman/dockeraudit/internal/types"
 )
 
-// ── helpers (shared with k8s_test.go via same package) ───────────────────────
+// ── helpers (shared with k8s_test.go via same package) ─────────────────────── //
 // findFinding, assertFail, assertPass, testdataDir are defined in k8s_test.go.
 
 // hasFail returns true if any finding in the slice has status FAIL.
@@ -23,7 +23,7 @@ func hasFail(findings []types.Finding) bool {
 	return false
 }
 
-// ── insecure.tf — should produce FAILs ────────────────────────────────────────
+// ── insecure.tf — should produce FAILs ──────────────────────────────────────── //
 
 func TestTerraformScanner_InsecureTF_HasFails(t *testing.T) {
 	td := testdataDir(t)
@@ -57,7 +57,7 @@ func TestTerraformScanner_InsecureTF_SpecificViolations(t *testing.T) {
 	assertFail(t, result.Findings, "IMAGE-002")   // hardcoded DB password (terraform scanner maps to IMAGE-002)
 }
 
-// ── secure.tf — should produce no FAILs ──────────────────────────────────────
+// ── secure.tf — should produce no FAILs ────────────────────────────────────── //
 
 func TestTerraformScanner_SecureTF_NoFails(t *testing.T) {
 	td := testdataDir(t)
@@ -79,7 +79,7 @@ func TestTerraformScanner_SecureTF_NoFails(t *testing.T) {
 	}
 }
 
-// ── db-insecure.tf — should trigger DB-TF findings ───────────────────────────
+// ── db-insecure.tf — should trigger DB-TF findings ─────────────────────────── //
 
 func TestTerraformScanner_InsecureDBTF_HasFails(t *testing.T) {
 	td := testdataDir(t)
@@ -97,7 +97,7 @@ func TestTerraformScanner_InsecureDBTF_HasFails(t *testing.T) {
 	}
 }
 
-// ── Connection URL patterns (session 3) ──────────────────────────────────────
+// ── Connection URL patterns (session 3) ────────────────────────────────────── //
 
 func TestTerraformScanner_ConnectionURLPatterns(t *testing.T) {
 	dir := t.TempDir()
@@ -204,7 +204,7 @@ resource "aws_lambda_function" "app" {
 	}
 }
 
-// ── non-existent path returns error ──────────────────────────────────────────
+// ── non-existent path returns error ────────────────────────────────────────── //
 
 func TestTerraformScanner_MissingPath_ReturnsError(t *testing.T) {
 	_, err := NewTerraformScanner([]string{"/nonexistent/does-not-exist.tf"}).Scan(context.Background())
@@ -213,7 +213,7 @@ func TestTerraformScanner_MissingPath_ReturnsError(t *testing.T) {
 	}
 }
 
-// ── empty path list returns empty result ─────────────────────────────────────
+// ── empty path list returns empty result ───────────────────────────────────── //
 
 func TestTerraformScanner_EmptyPaths_ReturnsEmptyFindings(t *testing.T) {
 	result, err := NewTerraformScanner([]string{}).Scan(context.Background())
@@ -248,7 +248,7 @@ func tfRunCheck(t *testing.T, checkName, content string) []types.Finding {
 	return nil
 }
 
-// ── ECR checks ──────────────────────────────────────────────────────────────
+// ── ECR checks ────────────────────────────────────────────────────────────── //
 
 func TestTF_ECRImmutableTags_Missing(t *testing.T) {
 	content := `resource "aws_ecr_repository" "app" {
@@ -287,7 +287,7 @@ func TestTF_ECRScanOnPush_Enabled(t *testing.T) {
 	assertPass(t, findings, "IMAGE-003")
 }
 
-// ── EKS checks ──────────────────────────────────────────────────────────────
+// ── EKS checks ────────────────────────────────────────────────────────────── //
 
 func TestTF_EKSAuditLogging_Missing(t *testing.T) {
 	content := `resource "aws_eks_cluster" "main" { name = "prod" }`
@@ -323,7 +323,7 @@ func TestTF_EKSPrivateEndpoint_OK(t *testing.T) {
 	assertPass(t, findings, "HOST-003")
 }
 
-// ── IMDSv2 ──────────────────────────────────────────────────────────────────
+// ── IMDSv2 ────────────────────────────────────────────────────────────────── //
 
 func TestTF_IMDSv2_NotRequired(t *testing.T) {
 	content := `resource "aws_launch_template" "main" {
@@ -344,7 +344,7 @@ func TestTF_IMDSv2_RequiredWithHop(t *testing.T) {
 	assertPass(t, findings, "NETWORK-002")
 }
 
-// ── Security Group Port 2375 ────────────────────────────────────────────────
+// ── Security Group Port 2375 ──────────────────────────────────────────────── //
 
 func TestTF_SGPort2375_Exposed(t *testing.T) {
 	content := `resource "aws_security_group" "docker" {
@@ -362,7 +362,7 @@ func TestTF_SGPort2375_NotExposed(t *testing.T) {
 	assertPass(t, findings, "DAEMON-002")
 }
 
-// ── RDS checks (DB-TF-001) ─────────────────────────────────────────────────
+// ── RDS checks (DB-TF-001) ───────────────────────────────────────────────── //
 
 func TestTF_RDSEncryption_False(t *testing.T) {
 	content := `resource "aws_db_instance" "main" {
@@ -410,7 +410,7 @@ func TestTF_RDSSkipFinalSnapshot_True(t *testing.T) {
 	assertFail(t, findings, "DB-TF-001")
 }
 
-// ── ElastiCache checks (DB-TF-002) ─────────────────────────────────────────
+// ── ElastiCache checks (DB-TF-002) ───────────────────────────────────────── //
 
 func TestTF_ElastiCacheEncryption_False(t *testing.T) {
 	content := `resource "aws_elasticache_replication_group" "redis" {
@@ -444,7 +444,7 @@ func TestTF_ElastiCacheAuth_Present(t *testing.T) {
 	assertPass(t, findings, "DB-TF-002")
 }
 
-// ── DocumentDB/DynamoDB checks (DB-TF-003) ──────────────────────────────────
+// ── DocumentDB/DynamoDB checks (DB-TF-003) ────────────────────────────────── //
 
 func TestTF_DocumentDBEncryption_False(t *testing.T) {
 	content := `resource "aws_docdb_cluster" "main" {
@@ -477,7 +477,7 @@ func TestTF_DynamoDBPITR_Missing(t *testing.T) {
 	assertWarn(t, findings, "DB-TF-003")
 }
 
-// ── S3 checks (TF-001, TF-002) ─────────────────────────────────────────────
+// ── S3 checks (TF-001, TF-002) ───────────────────────────────────────────── //
 
 func TestTF_S3PublicACL(t *testing.T) {
 	content := `resource "aws_s3_bucket" "data" {
@@ -503,7 +503,7 @@ func TestTF_S3Versioning_Enabled(t *testing.T) {
 	assertPass(t, findings, "TF-002")
 }
 
-// ── ECS checks (TF-003, TF-004, TF-005) ────────────────────────────────────
+// ── ECS checks (TF-003, TF-004, TF-005) ──────────────────────────────────── //
 
 func TestTF_ECSPrivileged(t *testing.T) {
 	content := `resource "aws_ecs_task_definition" "app" {
@@ -555,7 +555,7 @@ JSON
 	assertPass(t, findings, "TF-005")
 }
 
-// ── Security Group Unrestricted Ingress (TF-006) ────────────────────────────
+// ── Security Group Unrestricted Ingress (TF-006) ──────────────────────────── //
 
 func TestTF_SGUnrestrictedIngress_SSH(t *testing.T) {
 	content := `resource "aws_security_group" "web" {
@@ -583,7 +583,7 @@ func TestTF_SGUnrestrictedIngress_PrivateCIDR(t *testing.T) {
 	assertPass(t, findings, "TF-006")
 }
 
-// ── KMS Encryption (TF-007) ────────────────────────────────────────────────
+// ── KMS Encryption (TF-007) ──────────────────────────────────────────────── //
 
 func TestTF_KMS_EBSUnencrypted(t *testing.T) {
 	content := `resource "aws_ebs_volume" "data" {
@@ -601,7 +601,7 @@ func TestTF_KMS_EBSEncrypted(t *testing.T) {
 	assertPass(t, findings, "TF-007")
 }
 
-// ── CloudTrail Logging (TF-008) ────────────────────────────────────────────
+// ── CloudTrail Logging (TF-008) ──────────────────────────────────────────── //
 
 func TestTF_CloudTrail_LoggingDisabled(t *testing.T) {
 	content := `resource "aws_cloudtrail" "main" {
@@ -628,7 +628,7 @@ func TestTF_CloudTrail_OK(t *testing.T) {
 	assertPass(t, findings, "TF-008")
 }
 
-// ── GKE checks ──────────────────────────────────────────────────────────────
+// ── GKE checks ────────────────────────────────────────────────────────────── //
 
 func TestTF_GKENetworkPolicy_Missing(t *testing.T) {
 	content := `resource "google_container_cluster" "main" { name = "prod" }`
@@ -658,7 +658,7 @@ func TestTF_GKEDatabaseEncryption_Set(t *testing.T) {
 	assertPass(t, findings, "SECRETS-001")
 }
 
-// ── Bottlerocket ────────────────────────────────────────────────────────────
+// ── Bottlerocket ──────────────────────────────────────────────────────────── //
 
 func TestTF_Bottlerocket_NotUsed(t *testing.T) {
 	content := `resource "aws_eks_node_group" "main" {

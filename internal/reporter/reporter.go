@@ -162,8 +162,10 @@ func (r *Reporter) renderTable(results []*types.ScanResult) error {
 
 	// Print failures and remediations only when at least one FAIL exists.
 	totalFail := 0
+	totalWarn := 0
 	for _, result := range results {
 		totalFail += result.Fail
+		totalWarn += result.Warn
 	}
 	if totalFail > 0 {
 		fmt.Fprintln(out, doubleLine)
@@ -175,31 +177,57 @@ func (r *Reporter) renderTable(results []*types.ScanResult) error {
 				if f.Status != types.StatusFail {
 					continue
 				}
-				fmt.Fprintln(out)
-				fmt.Fprintln(out, r.blue(fmt.Sprintf("[%s] %s — %s", f.Control.ID, f.Control.Title, f.Target)))
-				fmt.Fprintf(out, "%s%s\n", r.blue("  Detail:      "), f.Detail)
-				if f.Evidence != "" {
-					fmt.Fprintf(out, "%s%s\n", r.blue("  Evidence:    "), truncate(f.Evidence, 200))
+				r.writeFindingDetail(out, f)
+			}
+		}
+		fmt.Fprintln(out)
+	}
+
+	// Print warnings with the same detail block so advisory findings are
+	// actionable in the same report.
+	if totalWarn > 0 {
+		fmt.Fprintln(out, doubleLine)
+		fmt.Fprintln(out, r.boldBlue("WARNINGS — REMEDIATION"))
+		fmt.Fprintln(out, doubleLine)
+
+		for _, result := range results {
+			for _, f := range result.Findings {
+				if f.Status != types.StatusWarn {
+					continue
 				}
-				rem := f.Remediation
-				if rem == "" {
-					rem = f.Control.Remediation
-				}
-				if rem != "" {
-					fmt.Fprintf(out, "%s%s\n", r.blue("  Remediation: "), rem)
-				}
-				compliance := fmt.Sprintf("CIS %s | NIST 800-53: %s | ISO 27001: %s | DISA: %s",
-					f.Control.Compliance.CISDockerSection,
-					f.Control.Compliance.NIST80053,
-					f.Control.Compliance.ISO27001,
-					f.Control.Compliance.DISACCI)
-				fmt.Fprintf(out, "%s%s\n", r.blue("  Compliance:  "), compliance)
+				r.writeFindingDetail(out, f)
 			}
 		}
 		fmt.Fprintln(out)
 	}
 
 	return nil
+}
+
+// writeFindingDetail prints the indented detail block (title line + Detail /
+// Evidence / Remediation / Compliance) shared by the FAILED CONTROLS and
+// WARNINGS sections of the table renderer.
+//nolint:errcheck // writing to output stream; broken pipe not recoverable in reporter context
+func (r *Reporter) writeFindingDetail(out io.Writer, f types.Finding) {
+	fmt.Fprintln(out)
+	fmt.Fprintln(out, r.blue(fmt.Sprintf("[%s] %s — %s", f.Control.ID, f.Control.Title, f.Target)))
+	fmt.Fprintf(out, "%s%s\n", r.blue("  Detail:      "), f.Detail)
+	if f.Evidence != "" {
+		fmt.Fprintf(out, "%s%s\n", r.blue("  Evidence:    "), truncate(f.Evidence, 200))
+	}
+	rem := f.Remediation
+	if rem == "" {
+		rem = f.Control.Remediation
+	}
+	if rem != "" {
+		fmt.Fprintf(out, "%s%s\n", r.blue("  Remediation: "), rem)
+	}
+	compliance := fmt.Sprintf("CIS %s | NIST 800-53: %s | ISO 27001: %s | DISA: %s",
+		f.Control.Compliance.CISDockerSection,
+		f.Control.Compliance.NIST80053,
+		f.Control.Compliance.ISO27001,
+		f.Control.Compliance.DISACCI)
+	fmt.Fprintf(out, "%s%s\n", r.blue("  Compliance:  "), compliance)
 }
 
 // ── JSON ──────────────────────────────────────────────────────────────────────
@@ -251,21 +279,55 @@ func (r *Reporter) renderMarkdown(results []*types.ScanResult) error {
 	}
 
 	// Failed controls
-	fmt.Fprintf(r.Output, "## Failed Controls\n\n")
+	if r.hasStatus(results, types.StatusFail) {
+		fmt.Fprintf(r.Output, "## Failed Controls\n\n")
+		r.writeMarkdownFindings(results, types.StatusFail)
+	}
+
+	// Warnings — same detail block as failures so advisory findings are
+	// actionable in the same report.
+	if r.hasStatus(results, types.StatusWarn) {
+		fmt.Fprintf(r.Output, "## Warnings\n\n")
+		r.writeMarkdownFindings(results, types.StatusWarn)
+	}
+	return nil
+}
+
+// hasStatus reports whether any finding in results has the given status.
+func (r *Reporter) hasStatus(results []*types.ScanResult, status types.Status) bool {
 	for _, result := range results {
 		for _, f := range result.Findings {
-			if f.Status != types.StatusFail {
+			if f.Status == status {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// writeMarkdownFindings emits a markdown detail block for every finding in
+// results that matches the given status.
+//nolint:errcheck // writing to output stream; broken pipe not recoverable in reporter context
+func (r *Reporter) writeMarkdownFindings(results []*types.ScanResult, status types.Status) {
+	for _, result := range results {
+		for _, f := range result.Findings {
+			if f.Status != status {
 				continue
 			}
 			fmt.Fprintf(r.Output, "### %s — %s\n\n", f.Control.ID, f.Control.Title)
 			fmt.Fprintf(r.Output, "- **Target:** `%s`\n", f.Target)
 			fmt.Fprintf(r.Output, "- **Severity:** %s\n", f.Control.Severity)
 			fmt.Fprintf(r.Output, "- **Detail:** %s\n", f.Detail)
+			if f.Evidence != "" {
+				fmt.Fprintf(r.Output, "- **Evidence:** %s\n", f.Evidence)
+			}
 			rem := f.Remediation
 			if rem == "" {
 				rem = f.Control.Remediation
 			}
-			fmt.Fprintf(r.Output, "- **Remediation:** %s\n", rem)
+			if rem != "" {
+				fmt.Fprintf(r.Output, "- **Remediation:** %s\n", rem)
+			}
 			fmt.Fprintf(r.Output, "- **CIS:** %s | **NIST 800-53:** %s | **ISO 27001:** %s | **DISA CCI:** %s\n\n",
 				f.Control.Compliance.CISDockerSection,
 				f.Control.Compliance.NIST80053,
@@ -273,7 +335,6 @@ func (r *Reporter) renderMarkdown(results []*types.ScanResult) error {
 				f.Control.Compliance.DISACCI)
 		}
 	}
-	return nil
 }
 
 // ── SARIF ─────────────────────────────────────────────────────────────────────

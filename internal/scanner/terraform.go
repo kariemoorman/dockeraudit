@@ -304,7 +304,7 @@ func (s *TerraformScanner) buildChecks() []tfCheck {
 			},
 		},
 
-		// ── Database: RDS (DB-TF-001) ─────────────────────────────────────────
+		// ── Database: RDS (DB-TF-001) ───────────────────────────────────────── //
 		{
 			name: "RDS Encryption at Rest",
 			run: func(path, content string) []types.Finding {
@@ -396,7 +396,7 @@ func (s *TerraformScanner) buildChecks() []tfCheck {
 			},
 		},
 
-		// ── Database: ElastiCache / Redis (DB-TF-002) ─────────────────────────
+		// ── Database: ElastiCache / Redis (DB-TF-002) ───────────────────────── //
 		{
 			name: "ElastiCache Encryption at Rest",
 			run: func(path, content string) []types.Finding {
@@ -465,7 +465,7 @@ func (s *TerraformScanner) buildChecks() []tfCheck {
 			},
 		},
 
-		// ── Database: DocumentDB / DynamoDB (DB-TF-003) ───────────────────────
+		// ── Database: DocumentDB / DynamoDB (DB-TF-003) ─────────────────────── //
 		{
 			name: "DocumentDB Encryption",
 			run: func(path, content string) []types.Finding {
@@ -534,7 +534,7 @@ func (s *TerraformScanner) buildChecks() []tfCheck {
 			},
 		},
 
-		// ── TF-001: S3 Bucket Not Publicly Accessible (Critical) ─────────────
+		// ── TF-001: S3 Bucket Not Publicly Accessible (Critical) ───────────── //
 		{
 			name: "S3 Public Access",
 			run: func(path, content string) []types.Finding {
@@ -592,7 +592,7 @@ func (s *TerraformScanner) buildChecks() []tfCheck {
 			},
 		},
 
-		// ── TF-002: S3 Bucket Versioning Enabled (Medium) ────────────────────
+		// ── TF-002: S3 Bucket Versioning Enabled (Medium) ──────────────────── //
 		{
 			name: "S3 Versioning",
 			run: func(path, content string) []types.Finding {
@@ -645,7 +645,7 @@ func (s *TerraformScanner) buildChecks() []tfCheck {
 			},
 		},
 
-		// ── TF-004: ECS Task Uses Non-Root User (Medium) ─────────────────────
+		// ── TF-004: ECS Task Uses Non-Root User (Medium) ───────────────────── //
 		{
 			name: "ECS Non-Root User",
 			run: func(path, content string) []types.Finding {
@@ -668,7 +668,7 @@ func (s *TerraformScanner) buildChecks() []tfCheck {
 			},
 		},
 
-		// ── TF-005: ECS Task Has Read-Only Root Filesystem (Medium) ──────────
+		// ── TF-005: ECS Task Has Read-Only Root Filesystem (Medium) ────────── //
 		{
 			name: "ECS Read-Only Root FS",
 			run: func(path, content string) []types.Finding {
@@ -694,7 +694,7 @@ func (s *TerraformScanner) buildChecks() []tfCheck {
 			},
 		},
 
-		// ── TF-006: Security Group Allows Unrestricted Ingress (High) ────────
+		// ── TF-006: Security Group Allows Unrestricted Ingress (High) ──────── //
 		{
 			name: "Security Group Unrestricted Ingress",
 			run: func(path, content string) []types.Finding {
@@ -748,7 +748,7 @@ func (s *TerraformScanner) buildChecks() []tfCheck {
 			},
 		},
 
-		// ── TF-007: KMS Encryption on EBS/RDS/S3 (High) ─────────────────────
+		// ── TF-007: KMS Encryption on EBS/RDS/S3 (High) ───────────────────── //
 		{
 			name: "KMS Encryption",
 			run: func(path, content string) []types.Finding {
@@ -792,7 +792,7 @@ func (s *TerraformScanner) buildChecks() []tfCheck {
 			},
 		},
 
-		// ── TF-008: CloudTrail / Logging Enabled (Medium) ────────────────────
+		// ── TF-008: CloudTrail / Logging Enabled (Medium) ──────────────────── //
 		{
 			name: "CloudTrail Logging",
 			run: func(path, content string) []types.Finding {

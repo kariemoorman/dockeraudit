@@ -17,7 +17,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// ── File type detection ─────────────────────────────────────────────────────
+// ── File type detection ───────────────────────────────────────────────────── //
 
 type dockerFileType int
 
@@ -77,7 +77,7 @@ func collectDockerFiles(root string) ([]string, error) {
 	return files, err
 }
 
-// ── DockerScanner ───────────────────────────────────────────────────────────
+// ── DockerScanner ─────────────────────────────────────────────────────────── //
 
 // DockerScanner performs static analysis on Dockerfiles and Docker Compose files
 // to detect security misconfigurations, embedded secrets, and best-practice violations.
@@ -225,7 +225,7 @@ func (s *DockerScanner) ScanPerFile(ctx context.Context) ([]*types.ScanResult, e
 	return results, nil
 }
 
-// ── Dockerfile scanning (existing) ──────────────────────────────────────────
+// ── Dockerfile scanning (existing) ────────────────────────────────────────── //
 
 // scanSingleDockerfile runs all checks against one Dockerfile and returns findings
 // with SourceFile and SourceLine set for precise location tracking.

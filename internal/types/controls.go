@@ -2,7 +2,7 @@ package types
 
 // AllControls is the canonical registry of every hardening control
 var AllControls = []Control{
-	// ── Domain: Host ──────────────────────────────────────────────────────────
+	// ── Domain: Host ────────────────────────────────────────────────────────── //
 	{
 		ID:     "HOST-001",
 		Domain: "Docker",
@@ -99,7 +99,7 @@ var AllControls = []Control{
 			"/usr/bin/dockerd, and systemd unit files.",
 	},
 
-	// ── Domain: Daemon ────────────────────────────────────────────────────────
+	// ── Domain: Daemon ──────────────────────────────────────────────────────── //
 	{
 		ID:     "DAEMON-001",
 		Domain: "Docker",
@@ -194,7 +194,7 @@ var AllControls = []Control{
 		Remediation: `Set log-driver, max-size, and max-file in /etc/docker/daemon.json.`,
 	},
 
-	// ── Domain: Image ─────────────────────────────────────────────────────────
+	// ── Domain: Image ───────────────────────────────────────────────────────── //
 	{
 		ID:     "IMAGE-001",
 		Domain: "Docker",
@@ -425,7 +425,7 @@ var AllControls = []Control{
 			"Only keep ADD when tar auto-extraction is intentional and documented.",
 	},
 
-	// ── Domain: Runtime ───────────────────────────────────────────────────────
+	// ── Domain: Runtime ─────────────────────────────────────────────────────── //
 	{
 		ID:     "RUNTIME-001",
 		Domain: "Docker",
@@ -596,7 +596,7 @@ var AllControls = []Control{
 			"Use PVC or emptyDir instead.",
 	},
 
-	// ── Domain: Network ───────────────────────────────────────────────────────
+	// ── Domain: Network ─────────────────────────────────────────────────────── //
 	{
 		ID:     "NETWORK-001",
 		Domain: "Kubernetes",
@@ -636,7 +636,7 @@ var AllControls = []Control{
 			"Set http_put_response_hop_limit: 1 and http_tokens: required (IMDSv2) on instances.",
 	},
 
-	// ── Domain: Secrets ───────────────────────────────────────────────────────
+	// ── Domain: Secrets ─────────────────────────────────────────────────────── //
 	{
 		ID:     "SECRETS-001",
 		Domain: "Secrets",
@@ -676,7 +676,7 @@ var AllControls = []Control{
 			"Remove cluster-admin bindings from non-admin service accounts.",
 	},
 
-	// ── Domain: Supply Chain ──────────────────────────────────────────────────
+	// ── Domain: Supply Chain ────────────────────────────────────────────────── //
 	{
 		ID:     "SUPPLY-001",
 		Domain: "Kubernetes",
@@ -735,7 +735,7 @@ var AllControls = []Control{
 			"Use Artifact Registry cleanup policies that KEEP tagged images.",
 	},
 
-	// ── Domain: Monitoring ────────────────────────────────────────────────────
+	// ── Domain: Monitoring ──────────────────────────────────────────────────── //
 	{
 		ID:     "MONITOR-001",
 		Domain: "Kubernetes",
@@ -775,7 +775,7 @@ var AllControls = []Control{
 			"exec/attach at RequestResponse. Ship to immutable SIEM/SOAR.",
 	},
 
-	// ── Domain: Runtime (continued) ───────────────────────────────────────────
+	// ── Domain: Runtime (continued) ─────────────────────────────────────────── //
 	{
 		ID:     "RUNTIME-010",
 		Domain: "Docker",
@@ -839,7 +839,7 @@ var AllControls = []Control{
 			"Set appropriate initialDelaySeconds to avoid premature kills.",
 	},
 
-	// ── Domain: Database ──────────────────────────────────────────────────────
+	// ── Domain: Database ────────────────────────────────────────────────────── //
 	{
 		ID:     "DB-IMAGE-001",
 		Domain: "Database",
@@ -1121,7 +1121,7 @@ var AllControls = []Control{
 			"point_in_time_recovery blocks.",
 	},
 
-	// ── Domain: Terraform / IaC ──────────────────────────────────────────────
+	// ── Domain: Terraform / IaC ────────────────────────────────────────────── //
 	{
 		ID:     "TF-001",
 		Domain: "Terraform",
@@ -1296,7 +1296,7 @@ var AllControls = []Control{
 			"on Terraform directories. Fix identified misconfigurations.",
 	},
 
-	// ── Domain: Image (continued) ────────────────────────────────────────────
+	// ── Domain: Image (continued) ──────────────────────────────────────────── //
 	{
 		ID:     "IMAGE-011",
 		Domain: "Docker",
@@ -1393,7 +1393,7 @@ var AllControls = []Control{
 			"Maintain a .dockerignore to exclude sensitive files (.env, .git, *.key).",
 	},
 
-	// ── Domain: Runtime (continued) ──────────────────────────────────────────
+	// ── Domain: Runtime (continued) ────────────────────────────────────────── //
 	{
 		ID:     "RUNTIME-013",
 		Domain: "Kubernetes",
@@ -1471,7 +1471,7 @@ var AllControls = []Control{
 			"In Compose v3+, use deploy.restart_policy with max_attempts.",
 	},
 
-	// ── Domain: Kubernetes ───────────────────────────────────────────────────
+	// ── Domain: Kubernetes ─────────────────────────────────────────────────── //
 	{
 		ID:     "K8S-001",
 		Domain: "Kubernetes",
@@ -1530,7 +1530,7 @@ var AllControls = []Control{
 			"on manifest directories. Fix identified misconfigurations.",
 	},
 
-	// ── Domain: Daemon (continued) ───────────────────────────────────────────
+	// ── Domain: Daemon (continued) ─────────────────────────────────────────── //
 	{
 		ID:     "DAEMON-006",
 		Domain: "Docker",
@@ -1588,7 +1588,7 @@ var AllControls = []Control{
 			"during daemon upgrades.",
 	},
 
-	// ── Domain: Host (continued) ─────────────────────────────────────────────
+	// ── Domain: Host (continued) ───────────────────────────────────────────── //
 	{
 		ID:     "HOST-006",
 		Domain: "Docker",

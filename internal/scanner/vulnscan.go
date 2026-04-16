@@ -13,7 +13,7 @@ import (
 	"github.com/kariemoorman/dockeraudit/internal/types"
 )
 
-// ── tool detection ───────────────────────────────────────────────────────────
+// ── tool detection ─────────────────────────────────────────────────────────── //
 
 // VulnScannerPref controls which vulnerability scanners are used.
 // Accepted values: "trivy", "snyk", "none".
@@ -62,7 +62,7 @@ func detectVulnTools() toolAvailability {
 	return avail
 }
 
-// ── trivy config JSON structures ─────────────────────────────────────────────
+// ── trivy config JSON structures ───────────────────────────────────────────── //
 
 type trivyConfigReport struct {
 	Results []trivyConfigResult `json:"Results"`
@@ -84,7 +84,7 @@ type trivyMisconfiguration struct {
 	} `json:"CauseMetadata"`
 }
 
-// ── snyk container JSON structures ───────────────────────────────────────────
+// ── snyk container JSON structures ───────────────────────────────────────── //
 
 type snykContainerReport struct {
 	OK              bool               `json:"ok"`
@@ -99,7 +99,7 @@ type snykContainerVuln struct {
 	Version  string `json:"version"`
 }
 
-// ── runner functions ─────────────────────────────────────────────────────────
+// ── runner functions ──────────────────────────────────────────────────────── //
 
 // runTrivyConfig runs `trivy config --format json` on a directory and returns
 // parsed findings under the given control.
@@ -273,7 +273,7 @@ func snykContainerToFindings(report snykContainerReport, ctrl types.Control, ima
 		strings.Join(details, "\n"), ctrl.Remediation)}
 }
 
-// ── orchestrator ─────────────────────────────────────────────────────────────
+// ── orchestrator ───────────────────────────────────────────────────────────── //
 
 // runIaCVulnScan runs trivy config on directories,
 // returning SKIP if trivy is not installed.
