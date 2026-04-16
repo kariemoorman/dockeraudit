@@ -207,7 +207,7 @@ func (r *Reporter) renderTable(results []*types.ScanResult) error {
 // writeFindingDetail prints the indented detail block (title line + Detail /
 // Evidence / Remediation / Compliance) shared by the FAILED CONTROLS and
 // WARNINGS sections of the table renderer.
-//nolint:errcheck writing to output stream; broken pipe not recoverable in reporter context
+//nolint:errcheck // writing to output stream; broken pipe not recoverable in reporter context
 func (r *Reporter) writeFindingDetail(out io.Writer, f types.Finding) {
 	fmt.Fprintln(out)
 	fmt.Fprintln(out, r.blue(fmt.Sprintf("[%s] %s — %s", f.Control.ID, f.Control.Title, f.Target)))
