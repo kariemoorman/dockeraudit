@@ -136,7 +136,7 @@ func TestK8sScanner_HelmChart_RunsPodChecks(t *testing.T) {
 	}
 
 	// The fixture deployment declares privileged: true and allowPrivilegeEscalation: true,
-	// lacks resource limits, and uses a tag-only image — so these controls must surface
+	// lacks resource limits, and uses a tag-only image so these controls must surface
 	// findings after the chart is rendered. Without helm rendering these would not appear.
 	mustHave := []string{
 		"RUNTIME-002", // privileged: true

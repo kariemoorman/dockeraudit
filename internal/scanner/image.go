@@ -165,7 +165,7 @@ func (s *ImageScanner) fetchImageData(ctx context.Context) (*imageInspect, strin
 	return &inspects[0], string(histOut), nil
 }
 
-// ── Static image checks ──────────────────────────────────────────────────────
+// ── Static image checks ────────────────────────────────────────────────────── //
 
 func (s *ImageScanner) checkDigestPinning(inspect *imageInspect) types.Finding {
 	ctrl := controlByID("IMAGE-001")

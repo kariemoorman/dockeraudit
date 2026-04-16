@@ -12,7 +12,7 @@ import (
 	"github.com/kariemoorman/dockeraudit/internal/types"
 )
 
-// ── controlByID lookup ────────────────────────────────────────────────────────
+// ── controlByID lookup ──────────────────────────────────────────────────────── //
 
 var (
 	controlMap     map[string]types.Control
@@ -33,7 +33,7 @@ func controlByID(id string) types.Control {
 	return types.Control{ID: id, Title: "Unknown control " + id}
 }
 
-// ── finding constructors ──────────────────────────────────────────────────────
+// ── finding constructors ────────────────────────────────────────────────────── //
 
 func pass(ctrl types.Control, target, detail string) types.Finding {
 	return types.Finding{
@@ -83,7 +83,7 @@ func errFinding(ctrl types.Control, target, detail string) types.Finding {
 	}
 }
 
-// ── shared credential patterns ───────────────────────────────────────────
+// ── shared credential patterns ─────────────────────────────────────────── //
 
 // credentialKeywords are env-var name substrings that indicate a secret value.
 // Shared across docker.go, k8s.go, and compose checks so detection stays in sync.
@@ -104,7 +104,7 @@ var aiKeyPatterns = []string{
 	"azure_openai_api_key",
 }
 
-// ── EOL image detection ─────────────────────────────────────────────────────
+// ── EOL image detection ───────────────────────────────────────────────────── //
 
 // EOLEntry defines an end-of-life image that should trigger IMAGE-008.
 // Exported so callers can supply custom entries via ImageScanner.CustomEOLImages
@@ -248,7 +248,7 @@ func shortImage(ref string) string {
 	return ref[:idx+len(marker)] + digest[:5] + "…"
 }
 
-// ── HOST-001: Minimal Base Image Classification ─────────────────────────────
+// ── HOST-001: Minimal Base Image Classification ───────────────────────────── //
 
 // imageMinimality represents the classification of an image's base OS minimality.
 type imageMinimality int

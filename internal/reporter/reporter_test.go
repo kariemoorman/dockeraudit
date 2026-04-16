@@ -381,7 +381,9 @@ func TestRenderJSON_EmptyResults(t *testing.T) {
 // columns start at exactly the same byte offset in every data row as they do in
 // the header, regardless of which status/severity value is present in that row.
 func TestRenderTable_RemediationSectionHiddenWhenNoFails(t *testing.T) {
-	// All-pass result — the FAILED CONTROLS section must not appear.
+	// Result with a WARN finding but no failures: the FAILED CONTROLS
+	// section must not appear, but the WARNINGS section should, so that
+	// advisory findings still carry their detail block.
 	r := &types.ScanResult{
 		Target:  "clean-image",
 		Scanner: "image",
@@ -405,12 +407,43 @@ func TestRenderTable_RemediationSectionHiddenWhenNoFails(t *testing.T) {
 	if strings.Contains(out, "FAILED CONTROLS") {
 		t.Error("FAILED CONTROLS section should not appear when FAIL=0")
 	}
-	if strings.Contains(out, "REMEDIATION") {
-		t.Error("REMEDIATION section should not appear when FAIL=0")
+	if !strings.Contains(out, "WARNINGS — REMEDIATION") {
+		t.Error("WARNINGS — REMEDIATION section should appear when WARN>0")
 	}
 	// Summary must still appear
 	if !strings.Contains(out, "FAIL=0") {
 		t.Error("summary line missing")
+	}
+}
+
+// TestRenderTable_NoRemediationSectionsWhenAllPass verifies that a scan with
+// only PASS findings emits neither the FAILED CONTROLS nor the WARNINGS
+// detail block.
+func TestRenderTable_NoRemediationSectionsWhenAllPass(t *testing.T) {
+	r := &types.ScanResult{
+		Target:  "clean-image",
+		Scanner: "image",
+		Findings: []types.Finding{
+			{Control: types.Control{ID: "IMAGE-005", Severity: types.SeverityMedium}, Status: types.StatusPass, Detail: "all good"},
+		},
+	}
+	r.Tally()
+
+	var buf bytes.Buffer
+	rep := New(FormatTable)
+	rep.Output = &buf
+	rep.Color = false
+
+	if err := rep.Render([]*types.ScanResult{r}); err != nil {
+		t.Fatalf("renderTable error: %v", err)
+	}
+
+	out := buf.String()
+	if strings.Contains(out, "FAILED CONTROLS") {
+		t.Error("FAILED CONTROLS section should not appear when FAIL=0")
+	}
+	if strings.Contains(out, "WARNINGS") {
+		t.Error("WARNINGS section should not appear when WARN=0")
 	}
 }
 

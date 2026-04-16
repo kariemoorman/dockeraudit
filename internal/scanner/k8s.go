@@ -81,7 +81,7 @@ type seccompProfile struct {
 	Type string `json:"type" yaml:"type"`
 }
 
-// probe is intentionally empty — the scanner only checks whether a container
+// probe is intentionally empty; the scanner only checks whether a container
 // declares a probe (via nil-pointer check on container.LivenessProbe /
 // container.ReadinessProbe), it never reads the probe's inner fields. Leaving
 // the struct empty also avoids IntOrString parse errors on sub-fields like
@@ -173,7 +173,7 @@ type servicePort struct {
 	Port     int32  `json:"port" yaml:"port"`
 	NodePort int32  `json:"nodePort" yaml:"nodePort"`
 	Protocol string `json:"protocol" yaml:"protocol"`
-	// targetPort is deliberately omitted — Kubernetes allows it to be either
+	// targetPort is deliberately omitted. Kubernetes allows it to be either
 	// an int port number or a named port string (IntOrString), and the
 	// scanner doesn't use it. Declaring it as int32 would cause json
 	// unmarshal to fail on Services with named ports like `targetPort: http`.
@@ -1405,7 +1405,7 @@ func checkK8sAntiAffinity(spec podSpec, target string) []types.Finding {
 		"Neither topologySpreadConstraints nor affinity.podAntiAffinity set")}
 }
 
-// ── NETWORK-001: NetworkPolicy ──────────────────────────────────────────────
+// ── NETWORK-001: NetworkPolicy ────────────────────────────────────────────── //
 
 type networkPolicySpec struct {
 	PodSelector json.RawMessage `json:"podSelector" yaml:"podSelector"`
@@ -1461,7 +1461,7 @@ func checkNetworkPolicyDefaultDeny(np networkPolicySpec, target string) []types.
 			np.PolicyTypes, !ingressRulesEmpty, !egressRulesEmpty))}
 }
 
-// ── NETWORK-002: Cloud Metadata Endpoint Blocked ────────────────────────────
+// ── NETWORK-002: Cloud Metadata Endpoint Blocked ──────────────────────────── //
 
 // egressRule represents a single egress rule in a NetworkPolicy.
 type egressRule struct {
@@ -1525,7 +1525,7 @@ func checkNetworkPolicyMetadataBlock(np networkPolicySpec, target string) []type
 	return nil // No metadata block found in this policy; scan-level aggregation handles the WARN
 }
 
-// ── SECRETS-001: External Secrets / Plaintext Secret ────────────────────────
+// ── SECRETS-001: External Secrets / Plaintext Secret ──────────────────────── //
 
 func checkPlaintextSecret(obj kubeObject, target string) []types.Finding {
 	ctrl := controlByID("SECRETS-001")
@@ -1557,7 +1557,7 @@ func checkPlaintextSecret(obj kubeObject, target string) []types.Finding {
 	return nil
 }
 
-// ── SECRETS-002: RBAC Secret Access ────────────────────────────────────────
+// ── SECRETS-002: RBAC Secret Access ──────────────────────────────────────── //
 
 type rbacRule struct {
 	APIGroups     []string `json:"apiGroups" yaml:"apiGroups"`
@@ -1614,7 +1614,7 @@ func checkRBACSecretAccess(rules []rbacRule, target string) []types.Finding {
 	return nil
 }
 
-// ── SUPPLY-001: Kyverno Image Verification ─────────────────────────────────
+// ── SUPPLY-001: Kyverno Image Verification ───────────────────────────────── //
 
 func checkKyvernoImageVerification(obj kubeObject, target string) []types.Finding {
 	ctrl := controlByID("SUPPLY-001")
@@ -1633,7 +1633,7 @@ func checkKyvernoImageVerification(obj kubeObject, target string) []types.Findin
 	return nil
 }
 
-// ── MONITOR-001: Runtime Threat Detection Agent ────────────────────────────
+// ── MONITOR-001: Runtime Threat Detection Agent ──────────────────────────── //
 
 var runtimeDetectionAgents = []string{
 	"falco", "tetragon", "sysdig", "aquasec", "twistlock",
@@ -1655,7 +1655,7 @@ func checkRuntimeDetectionAgent(spec podSpec, target string) []types.Finding {
 	return nil
 }
 
-// ── MONITOR-002: Kubernetes API Server Audit Logging ───────────────────────
+// ── MONITOR-002: Kubernetes API Server Audit Logging ─────────────────────── //
 
 func checkAuditPolicy(obj kubeObject, target string) []types.Finding {
 	ctrl := controlByID("MONITOR-002")
@@ -1678,7 +1678,7 @@ func checkAuditPolicy(obj kubeObject, target string) []types.Finding {
 		"audit.k8s.io Policy spec without rules")}
 }
 
-// ── Scan-level aggregation helpers ─────────────────────────────────────────
+// ── Scan-level aggregation helpers ───────────────────────────────────────── //
 
 func hasFindingForControl(findings []types.Finding, controlID string, status types.Status) bool {
 	for _, f := range findings {

@@ -16,10 +16,7 @@ var errHelmNotInstalled = errors.New("helm binary not found on PATH")
 
 // isHelmChart reports whether dir is the root of a Helm chart. A Helm chart
 // must contain a Chart.yaml file plus either a templates/ subdirectory (own
-// templates) or a charts/ subdirectory (subchart dependencies only — valid for
-// umbrella charts such as bitnami/cloudnative-pg). Requiring at least one of
-// those siblings avoids false positives from ordinary directories that happen
-// to contain a file named Chart.yaml.
+// templates) or a charts/ subdirectory.
 func isHelmChart(dir string) bool {
 	info, err := os.Stat(dir)
 	if err != nil || !info.IsDir() {
@@ -40,8 +37,8 @@ func isHelmChart(dir string) bool {
 
 // renderHelmChart runs `helm template <chartDir>` and writes the rendered
 // multi-document YAML to a file inside a newly-created tmp directory. The
-// caller must invoke the returned cleanup func (typically via defer) to
-// remove the tmp directory once scanning completes.
+// caller must invoke the returned cleanup func to remove the tmp directory
+// once scanning completes.
 //
 // If helm is not installed, the sentinel errHelmNotInstalled is returned.
 // For any other failure, the returned error contains helm's combined stdout
