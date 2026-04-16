@@ -1422,6 +1422,38 @@ spec:
 	assertFail(t, result.Findings, "DAEMON-001")
 }
 
+// ── Parse error surfacing ────────────────────────────────────────────────────
+
+// TestK8sScanner_ParseError_EmitsErrorFinding verifies that YAML parse errors
+// (commonly caused by un-rendered Helm templates containing `{{ .Values.foo }}`)
+// produce an ERROR finding rather than being silently swallowed.
+func TestK8sScanner_ParseError_EmitsErrorFinding(t *testing.T) {
+	// Deliberately invalid YAML: Go template braces trip yaml.v3's decoder.
+	path := writeTestManifest(t, `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.name }}
+spec:
+  replicas: {{ .Values.replicas }}
+`)
+
+	result, err := k8sScanner(path).Scan(context.Background())
+	if err != nil {
+		t.Fatalf("scan failed: %v", err)
+	}
+
+	var found bool
+	for _, f := range result.Findings {
+		if f.Status == types.StatusError && strings.Contains(f.Detail, "YAML parse error") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected an ERROR finding for YAML parse failure; got findings: %+v", result.Findings)
+	}
+}
+
 // ── Test helper ──────────────────────────────────────────────────────────────
 
 func writeTestManifest(t *testing.T, content string) string {

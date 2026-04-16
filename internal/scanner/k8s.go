@@ -3,14 +3,16 @@ package scanner
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"slices"
 	"sort"
 	"strings"
 
 	"github.com/kariemoorman/dockeraudit/internal/types"
-	
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -181,7 +183,32 @@ func (s *K8sScanner) Scan(ctx context.Context) (*types.ScanResult, error) {
 	}
 
 	for _, p := range s.ManifestPaths {
-		files, err := collectFiles(p, []string{".yaml", ".yml", ".json"})
+		scanRoot := p
+		displayRoot := p
+		isChart := false
+
+		// Helm chart detection: render templates to valid YAML before scanning.
+		if isHelmChart(p) {
+			rendered, cleanup, err := renderHelmChart(ctx, p)
+			if err != nil {
+				if errors.Is(err, errHelmNotInstalled) {
+					result.Findings = append(result.Findings, skipped(controlByID("K8S-003"), p,
+						"Helm chart detected but `helm` binary not on PATH — install helm to render templates"))
+					continue
+				}
+				result.Findings = append(result.Findings, types.Finding{
+					Status: types.StatusError,
+					Target: p,
+					Detail: fmt.Sprintf("helm template rendering failed: %v", err),
+				})
+				continue
+			}
+			defer cleanup()
+			scanRoot = rendered
+			isChart = true
+		}
+
+		files, err := collectFiles(scanRoot, []string{".yaml", ".yml", ".json"})
 		if err != nil {
 			return nil, err
 		}
@@ -189,7 +216,10 @@ func (s *K8sScanner) Scan(ctx context.Context) (*types.ScanResult, error) {
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
-			relF := relPath(p, f)
+			relF := relPath(scanRoot, f)
+			if isChart {
+				relF = fmt.Sprintf("%s/%s (rendered)", displayRoot, relF)
+			}
 			findings, err := s.scanManifestFile(ctx, f, relF)
 			if err != nil {
 				result.Findings = append(result.Findings, types.Finding{
@@ -287,9 +317,21 @@ func (s *K8sScanner) scanManifestFile(ctx context.Context, path, displayPath str
 	// json.RawMessage fields directly — the Spec field would be nil otherwise.
 	var findings []types.Finding
 	decoder := yaml.NewDecoder(strings.NewReader(string(data)))
-	for {
+	for docIdx := 0; ; docIdx++ {
 		var raw interface{}
-		if err := decoder.Decode(&raw); err != nil {
+		err := decoder.Decode(&raw)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			// yaml.v3 cannot reliably resync past a parse error, so surface it and stop.
+			// This commonly trips on Helm templates with `{{ .Values.foo }}` syntax when
+			// the chart was not rendered first.
+			findings = append(findings, types.Finding{
+				Status: types.StatusError,
+				Target: displayPath,
+				Detail: fmt.Sprintf("YAML parse error in document #%d: %v", docIdx+1, err),
+			})
 			break
 		}
 		if raw == nil {
