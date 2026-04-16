@@ -44,7 +44,7 @@ jobs:
         run: |
           CURRENT_TAG="v${{ steps.current.outputs.version }}"
           TAG_EXISTS="${{ steps.currenttag.outputs.exists }}"
-          
+
           if [[ "$TAG_EXISTS" == "true" ]]; then
             RANGE="${CURRENT_TAG}..HEAD"
           else
@@ -55,35 +55,42 @@ jobs:
               RANGE=""
             fi
           fi
-          
+
           echo "Commit range: ${RANGE:-all commits}"
-          
+
+          # Use %B (full message) instead of %s (subject only) so that
+          # GitHub squash-merge commits — whose conventional-commit prefixes
+          # often appear only in the body as "* feat: ..." bullets — are
+          # analyzed too.
           if [[ -z "$RANGE" ]]; then
-            COMMITS=$(git log --pretty=format:"%s")
+            COMMITS=$(git log --pretty=format:"%B%n----%n")
           else
-            COMMITS=$(git log "$RANGE" --pretty=format:"%s" 2>/dev/null || echo "")
+            COMMITS=$(git log "$RANGE" --pretty=format:"%B%n----%n" 2>/dev/null || echo "")
           fi
-          
+
           if [[ -z "$COMMITS" ]]; then
             echo "No commits to analyze"
             echo "bump=none" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          
+
           echo "Commits found:"
           echo "$COMMITS"
           echo ""
-          
+
           BUMP="none"
-          
-          if echo "$COMMITS" | grep -qE '^[a-z]+(\(.+\))?!:|BREAKING CHANGE:'; then
+
+          # The optional "(\* )?" prefix on each pattern matches both the
+          # subject line of a regular commit and the "* " bullet that GitHub
+          # squash merges put in front of each sub-commit in the body.
+          if echo "$COMMITS" | grep -qE '^(\* )?[a-z]+(\(.+\))?!:|BREAKING CHANGE:'; then
             BUMP="major"
-          elif echo "$COMMITS" | grep -qE '^feat(\(.+\))?:'; then
+          elif echo "$COMMITS" | grep -qE '^(\* )?feat(\(.+\))?:'; then
             BUMP="minor"
-          elif echo "$COMMITS" | grep -qE '^fix(\(.+\))?:'; then
+          elif echo "$COMMITS" | grep -qE '^(\* )?fix(\(.+\))?:'; then
             BUMP="patch"
           fi
-          
+
           echo "Bump type: $BUMP"
           echo "bump=$BUMP" >> "$GITHUB_OUTPUT"
 
