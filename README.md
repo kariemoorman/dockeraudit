@@ -1,5 +1,5 @@
 
-<p align='center'><img src='assets/dockeraudit.png' width='70%'></p>
+<p align='center'><img src='assets/dockeraudit.png' width='20%'></p>
 
 <h1 align=center><b>dockeraudit</b></h1><p align=center>A CONTAINER SECURITY AUDITING TOOLKIT</p>
 
