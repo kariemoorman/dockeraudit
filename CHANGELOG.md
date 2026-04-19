@@ -1,6 +1,31 @@
 # Changelog
 
-## [Unreleased]
+## [Unreleased] 
+
+### Added
+
+#### Registry Scanner (4 controls)
+- REGISTRY-001: insecure-registries entries in `/etc/docker/daemon.json`
+  detected during `--daemon` scans
+- REGISTRY-002: unauthenticated / `http://` registry references flagged in
+  Dockerfile `FROM`, Compose `image:`, and Kubernetes pod specs; distinguishes
+  insecure (FAIL), anonymous Docker Hub (WARN), and authenticated private
+  registries (PASS) across ECR, GAR, ACR, GHCR, GitLab, Harbor
+- REGISTRY-003: ECR repository/registry policies granting Principal `*`,
+  GAR IAM bindings to `allUsers`/`allAuthenticatedUsers`, and ACR
+  `anonymous_pull_enabled = true` flagged in Terraform scans
+- REGISTRY-004: missing lifecycle/retention policies on ECR, GAR, and ACR
+  flagged in Terraform scans
+
+## [0.0.2] - 2026-04-15
+
+### Added 
+
+### Helm Chart Scanning
+- `dockeraudit k8s <chart-dir>` auto-detects Helm charts and renders them via
+  `helm template` before re-using the Kubernetes scanner pipeline
+- All k8s controls (RUNTIME-*, K8S-*, NETWORK-*, DB-K8S-*, SECRETS-*, MONITOR-*)
+  now apply to rendered Helm chart manifests without additional configuration
 
 
 ## [0.0.1] - 2025-03-08

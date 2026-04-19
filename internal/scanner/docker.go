@@ -277,6 +277,7 @@ func (s *DockerScanner) checkLines(dockerfilePath string, content []byte) []type
 	hasRecursiveCopy    := false  // IMAGE-016: set true when COPY . . detected
 	fromCount           := 0      // IMAGE-015: count FROM instructions for multi-stage check
 	lastFromImage       := ""     // HOST-001: track final FROM image for minimality check
+	hasRegistryIssue    := false  // REGISTRY-002: set true when an insecure/anonymous FROM is emitted
 	var cmdEntrypoint   []string  // RUNTIME-010 / DB-IMAGE-002: accumulate CMD/ENTRYPOINT values
 
 	for scanner.Scan() {
@@ -313,9 +314,26 @@ func (s *DockerScanner) checkLines(dockerfilePath string, content []byte) []type
 			}
 
 			// HOST-001: Minimal base image check (only on the final FROM stage)
-			parts := strings.Fields(trimmed)
-			if len(parts) >= 2 {
-				lastFromImage = parts[1] // track last FROM image for multi-stage final check
+			// REGISTRY-002: FROM references an insecure or anonymous registry
+			fromParts := strings.Fields(trimmed)
+			if len(fromParts) >= 2 {
+				lastFromImage = fromParts[1] // track last FROM image for multi-stage final check
+				if fromParts[1] != "scratch" {
+					posture, host, detail := classifyRegistryRef(fromParts[1])
+					ctrl := controlByID("REGISTRY-002")
+					switch posture {
+					case "insecure":
+						hasRegistryIssue = true
+						findings = append(findings, withSource(fail(ctrl, dockerfilePath,
+							fmt.Sprintf("FROM uses insecure registry reference at line %d: %s", lineNum, fromParts[1]),
+							detail, ctrl.Remediation), dockerfilePath, lineNum))
+					case "anonymous":
+						hasRegistryIssue = true
+						findings = append(findings, withSource(warn(ctrl, dockerfilePath,
+							fmt.Sprintf("FROM pulls from %s at line %d — %s", host, lineNum, detail),
+							fromParts[1]), dockerfilePath, lineNum))
+					}
+				}
 			}
 		}
 
@@ -570,6 +588,12 @@ func (s *DockerScanner) checkLines(dockerfilePath string, content []byte) []type
 	if !hasLocalADD {
 		findings = append(findings, pass(controlByID("IMAGE-014"), dockerfilePath,
 			"No local-file ADD instructions found — COPY is used correctly"))
+	}
+
+	// REGISTRY-002: PASS when FROM lines present and no insecure/anonymous registry detected.
+	if hasFromLine && !hasRegistryIssue {
+		findings = append(findings, pass(controlByID("REGISTRY-002"), dockerfilePath,
+			"All FROM references use authenticated / secure registries"))
 	}
 
 	// RUNTIME-010: check CMD/ENTRYPOINT for sshd; SKIP when neither is present
@@ -885,6 +909,7 @@ func (s *DockerScanner) scanComposeFile(path string) []types.Finding {
 		svcFindings = append(svcFindings, checkComposeDangerousDBFlags(svc, target)...)
 		svcFindings = append(svcFindings, checkComposeUlimits(svc, target)...)
 		svcFindings = append(svcFindings, checkComposeRestartPolicy(svc, target)...)
+		svcFindings = append(svcFindings, checkComposeRegistryAuth(svc, target)...)
 
 		// Set SourceFile on all compose findings
 		for i := range svcFindings {
@@ -1385,6 +1410,28 @@ func checkComposeRestartPolicy(svc composeService, target string) []types.Findin
 	}
 	return []types.Finding{pass(ctrl, target,
 		fmt.Sprintf("Restart policy: %s", svc.Restart))}
+}
+
+// checkComposeRegistryAuth flags compose services whose image field references an
+// insecure or anonymous registry (REGISTRY-002).
+func checkComposeRegistryAuth(svc composeService, target string) []types.Finding {
+	ctrl := controlByID("REGISTRY-002")
+	if svc.Image == "" {
+		return []types.Finding{skipped(ctrl, target, "Build-context service — no image reference to classify")}
+	}
+	posture, host, detail := classifyRegistryRef(svc.Image)
+	switch posture {
+	case "insecure":
+		return []types.Finding{fail(ctrl, target,
+			fmt.Sprintf("Image uses insecure registry reference: %s", svc.Image),
+			detail, ctrl.Remediation)}
+	case "anonymous":
+		return []types.Finding{warn(ctrl, target,
+			fmt.Sprintf("Image pulls from %s — %s", host, detail),
+			fmt.Sprintf("image: %s", svc.Image))}
+	}
+	return []types.Finding{pass(ctrl, target,
+		fmt.Sprintf("Image references an authenticated registry: %s", host))}
 }
 
 // checkComposeEOLImage checks the service image tag against known end-of-life images (IMAGE-008).

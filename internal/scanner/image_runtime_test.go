@@ -221,6 +221,7 @@ func TestCheckKernelVersion_Empty(t *testing.T) {
 	f := findFinding(findings, "HOST-002")
 	if f == nil {
 		t.Fatal("expected finding for HOST-002")
+		return
 	}
 	if f.Status != types.StatusWarn {
 		t.Errorf("expected WARN for empty kernel version, got %s", f.Status)
@@ -294,6 +295,7 @@ func TestCheckAuditdDockerFiles_EmptyRules(t *testing.T) {
 	f := findFinding(findings, "HOST-005")
 	if f == nil {
 		t.Fatal("expected finding for HOST-005")
+		return
 	}
 	if f.Status != types.StatusWarn {
 		t.Errorf("expected WARN for empty auditctl output, got %s", f.Status)
@@ -321,6 +323,7 @@ func TestCheckAuditdDockerPaths_EmptyRules(t *testing.T) {
 	f := findFinding(findings, "HOST-006")
 	if f == nil {
 		t.Fatal("expected finding for HOST-006")
+		return
 	}
 	if f.Status != types.StatusWarn {
 		t.Errorf("expected WARN for empty auditctl output, got %s", f.Status)

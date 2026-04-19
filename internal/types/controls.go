@@ -2,7 +2,7 @@ package types
 
 // AllControls is the canonical registry of every hardening control
 var AllControls = []Control{
-	// ── Domain: Host ────────────────────────────────────────────────────────── //
+	// ── Domain: Host ──────────────────────────────────────────────────────────
 	{
 		ID:     "HOST-001",
 		Domain: "Docker",
@@ -14,8 +14,8 @@ var AllControls = []Control{
 		Compliance: ComplianceMapping{
 			CISDockerSection: "1.1",
 			NIST80053:        "CM-6, CM-7",
-			NIST800190:       "§4.1, §4.5",
-			ISO27001:         "A.12.6.1, A.14.2.1",
+			NIST800190:       "§4.5.1",
+			ISO27001:         "A.8.8, A.8.9",
 			SOC2:             "CC6.1",
 			DISACCI:          "CCI-000381",
 		},
@@ -29,14 +29,14 @@ var AllControls = []Control{
 		Description: "Unpatched kernel CVEs (Dirty Pipe CVE-2022-0847, runc CVE-2019-5736) " +
 			"enable container escape. The host kernel must be current.",
 		Severity: SeverityCritical,
-		Type:     ControlCorrective,
+		Type:     ControlPreventive,
 		Compliance: ComplianceMapping{
 			CISDockerSection: "1.2",
-			NIST80053:        "SI-2, RA-5",
-			NIST800190:       "§4.1",
-			ISO27001:         "A.12.6.1",
+			NIST80053:        "CA-7, SI-2, RA-5",
+			NIST800190:       "§4.5.3",
+			ISO27001:         "A.8.8, A.8.9",
 			SOC2:             "CC7.1",
-			DISACCI:          "CCI-002617",
+			DISACCI:          "N/A",
 		},
 		Remediation: "Enable unattended-upgrades or dnf-automatic. " +
 			"Build fresh node AMIs weekly. Rotate node groups on new AMI.",
@@ -53,9 +53,9 @@ var AllControls = []Control{
 			CISDockerSection: "N/A",
 			NIST80053:        "SC-7, AC-17",
 			NIST800190:       "§4.5",
-			ISO27001:         "A.13.1.1, A.13.1.3",
+			ISO27001:         "A.8.20, A.8.22",
 			SOC2:             "CC6.6",
-			DISACCI:          "CCI-001090",
+			DISACCI:          "CCI-001097",
 		},
 		Remediation: "Block 2375 via iptables/security group. " +
 			"Restrict 10250 to control plane subnet. Use IMDSv2 (hop limit=1).",
@@ -69,11 +69,11 @@ var AllControls = []Control{
 		Severity: SeverityCritical,
 		Type:     ControlPreventive,
 		Compliance: ComplianceMapping{
-			CISDockerSection: "1.6, 1.7",
+			CISDockerSection: "5.2, 5.3",
 			NIST80053:        "AC-3, AC-6, SI-7",
-			NIST800190:       "§4.4",
-			ISO27001:         "A.9.4.1, A.12.1.4",
-			SOC2:             "CC6.1",
+			NIST800190:       "§4.4.3, §4.5",
+			ISO27001:         "A.8.3, A.8.9",
+			SOC2:             "CC6.1, CC6.3",
 			DISACCI:          "CCI-002235",
 		},
 		Remediation: "Set SELINUX=enforcing in /etc/selinux/config. " +
@@ -82,24 +82,65 @@ var AllControls = []Control{
 	{
 		ID:     "HOST-005",
 		Domain: "Docker",
-		Title:  "Auditd Rules for Docker Files",
-		Description: "Without auditd rules, tampering of daemon config, docker binary, " +
-			"and socket permissions goes undetected.",
+		Title:  "Auditd Rules for Container Runtime Binaries",
+		Description: "Swapped runtime binaries (dockerd, containerd, runc, shims) " +
+    			"gives an attacker hidden root control over every container on the host. " +
+    			"Auditd rules must log writes to these binaries. ",
 		Severity: SeverityHigh,
 		Type:     ControlDetective,
 		Compliance: ComplianceMapping{
-			CISDockerSection: "1.8–1.13",
+			CISDockerSection: "1.1.3, 1.1.14-1.1.18",
 			NIST80053:        "AU-2, AU-12",
-			NIST800190:       "§4.5",
-			ISO27001:         "A.12.4.1, A.12.4.3",
+			NIST800190:       "§4.5.5",
+			ISO27001:         "A.8.15, A.8.16",
 			SOC2:             "CC7.2",
 			DISACCI:          "CCI-000172",
 		},
-		Remediation: "Add auditd rules for /etc/docker, /var/run/docker.sock, " +
-			"/usr/bin/dockerd, and systemd unit files.",
+		Remediation: "Add auditd -w rules for each runtime binary and reload with " +
+        "`augenrules --load`:\n" +
+        "  -w /usr/bin/dockerd                    -p wa -k docker\n" +
+        "  -w /usr/bin/containerd                 -p wa -k docker\n" +
+        "  -w /usr/bin/containerd-shim            -p wa -k docker\n" +
+        "  -w /usr/bin/containerd-shim-runc-v1    -p wa -k docker\n" +
+        "  -w /usr/bin/containerd-shim-runc-v2    -p wa -k docker\n" +
+        "  -w /usr/bin/runc                       -p wa -k docker\n" +
+        "Place these in /etc/audit/rules.d/docker.rules. ",
 	},
 
-	// ── Domain: Daemon ──────────────────────────────────────────────────────── //
+	{
+		ID:     "HOST-006",
+		Domain: "Docker",
+		Title:  "Auditd Rules for Docker Config, Sockets & Data",
+		Description: "An edited daemon config, unit file, or socket (daemon.json, " +
+    			"docker.service, docker.sock) silently weakens runtime isolation, " +
+    			"adding insecure-registries, disabling userns-remap, or exposing the daemon " +
+    			"over TCP. Auditd rules must log writes to these paths.",
+		Severity: SeverityMedium,
+		Type:     ControlDetective,
+		Compliance: ComplianceMapping{
+			CISDockerSection: "1.1.4-1.1.13",
+			NIST80053:        "AU-2, AU-12",
+			NIST800190:       "§4.5.5",
+			ISO27001:         "A.8.15, A.8.16",
+			SOC2:             "CC7.2",
+			DISACCI:          "CCI-000172",
+		},
+		Remediation: "Add auditd -w rules for Docker configuration, service units, " +
+        "sockets, and data directories, then reload with `augenrules --load`:\n" +
+        "  -w /run/containerd                     -p wa -k docker\n" +
+        "  -w /var/lib/docker                     -p wa -k docker\n" +
+        "  -w /etc/docker                         -p wa -k docker\n" +
+        "  -w /lib/systemd/system/docker.service  -p wa -k docker\n" +
+        "  -w /run/containerd/containerd.sock     -p wa -k docker\n" +
+        "  -w /var/run/docker.sock                -p wa -k docker\n" +
+        "  -w /etc/default/docker                 -p wa -k docker\n" +
+        "  -w /etc/docker/daemon.json             -p wa -k docker\n" +
+        "  -w /etc/containerd/config.toml         -p wa -k docker\n" +
+        "  -w /etc/sysconfig/docker               -p wa -k docker\n" +
+        "Place these in /etc/audit/rules.d/docker.rules. ",
+	},
+
+	// ── Domain: Daemon ────────────────────────────────────────────────────────
 	{
 		ID:     "DAEMON-001",
 		Domain: "Docker",
@@ -109,11 +150,11 @@ var AllControls = []Control{
 		Severity: SeverityCritical,
 		Type:     ControlPreventive,
 		Compliance: ComplianceMapping{
-			CISDockerSection: "2.2, 5.32",
-			NIST80053:        "AC-3, AC-6",
-			NIST800190:       "§4.3",
-			ISO27001:         "A.9.4.1",
-			SOC2:             "CC6.1",
+			CISDockerSection: "5.32",
+			NIST80053:        "	AC-3, AC-6, CM-11",
+			NIST800190:       "§3.5.5, §4.5.5",
+			ISO27001:         "A.8.3, A.8.9, A.8.18",
+			SOC2:             "CC6.1, CC6.3",
 			DISACCI:          "CCI-002235",
 		},
 		Remediation: "Remove docker.sock volume mounts from all workloads. " +
@@ -128,10 +169,10 @@ var AllControls = []Control{
 		Severity: SeverityCritical,
 		Type:     ControlPreventive,
 		Compliance: ComplianceMapping{
-			CISDockerSection: "2.1",
+			CISDockerSection: "2.7",
 			NIST80053:        "AC-17, IA-3, SC-8",
-			NIST800190:       "§4.3",
-			ISO27001:         "A.13.1.1",
+			NIST800190:       "§4.5.1",
+			ISO27001:         "A.8.20, A.8.9",
 			SOC2:             "CC6.6",
 			DISACCI:          "CCI-002418",
 		},
@@ -147,11 +188,11 @@ var AllControls = []Control{
 		Severity: SeverityHigh,
 		Type:     ControlPreventive,
 		Compliance: ComplianceMapping{
-			CISDockerSection: "2.8",
+			CISDockerSection: "2.9",
 			NIST80053:        "AC-3, AC-6",
-			NIST800190:       "§4.3",
-			ISO27001:         "A.9.4.1",
-			SOC2:             "CC6.1",
+			NIST800190:       "§4.4.3",
+			ISO27001:         "A.8.3, A.8.9",
+			SOC2:             "CC6.1, CC6.3",
 			DISACCI:          "CCI-002235",
 		},
 		Remediation: `Set "userns-remap": "default" in /etc/docker/daemon.json and restart Docker.`,
@@ -165,12 +206,12 @@ var AllControls = []Control{
 		Severity: SeverityHigh,
 		Type:     ControlPreventive,
 		Compliance: ComplianceMapping{
-			CISDockerSection: "2.18, 4.5",
-			NIST80053:        "SI-7, CM-14",
-			NIST800190:       "§4.2",
-			ISO27001:         "A.14.2.9",
+			CISDockerSection: "4.5",
+			NIST80053:        "SI-7, CM-14, SR-4, SR-11",
+			NIST800190:       "§4.1.5",
+			ISO27001:         "A.8.24, A.5.7",
 			SOC2:             "CC6.1",
-			DISACCI:          "CCI-001762",
+			DISACCI:          "CCI-001749",
 		},
 		Remediation: "Set DOCKER_CONTENT_TRUST=1 in daemon environment. " +
 			"For Kubernetes: use Cosign + Sigstore with Kyverno/Connaisseur admission.",
@@ -184,14 +225,73 @@ var AllControls = []Control{
 		Severity: SeverityMedium,
 		Type:     ControlPreventive,
 		Compliance: ComplianceMapping{
-			CISDockerSection: "2.12, 2.13",
-			NIST80053:        "AU-3, AU-9, AU-12",
-			NIST800190:       "§4.3",
-			ISO27001:         "A.12.4.1",
+			CISDockerSection: "2.3, 2.13",
+			NIST80053:        "AU-3, AU-9, AU-12, AU-11",
+			NIST800190:       "§4.5",
+			ISO27001:         "A.8.15, A.8.16",
 			SOC2:             "CC7.2",
 			DISACCI:          "CCI-000172",
 		},
 		Remediation: `Set log-driver, max-size, and max-file in /etc/docker/daemon.json.`,
+	},
+
+	{
+		ID:     "DAEMON-006",
+		Domain: "Docker",
+		Title:  "Inter-Container Communication Disabled",
+		Description: "Default Docker networking allows all containers to communicate freely. " +
+			"Disabling ICC (--icc=false) forces explicit --link or network declarations.",
+		Severity: SeverityMedium,
+		Type:     ControlPreventive,
+		Compliance: ComplianceMapping{
+			CISDockerSection: "2.2",
+			NIST80053:        "SC-7",
+			NIST800190:       "§4.4.2",
+			ISO27001:         "A.8.22, A.8.9",
+			SOC2:             "CC6.6",
+			DISACCI:          "CCI-001090",
+		},
+		Remediation: "Set \"icc\": false in daemon.json. " +
+			"Use user-defined bridge networks for services that need to communicate.",
+	},
+
+	{
+		ID:     "DAEMON-007",
+		Domain: "Docker",
+		Title:  "Userland Proxy Disabled",
+		Description: "The Docker userland proxy (docker-proxy) is a user-space TCP forwarder " +
+			"that bypasses iptables connection tracking and has higher overhead.",
+		Severity: SeverityLow,
+		Type:     ControlPreventive,
+		Compliance: ComplianceMapping{
+			CISDockerSection: "2.16",
+			NIST80053:        "SC-5",
+			NIST800190:       "§4.5",
+			ISO27001:         "A.8.20, A.8.9",
+			SOC2:             "CC6.1",
+			DISACCI:          "CCI-000366",
+		},
+		Remediation: "Set \"userland-proxy\": false in daemon.json to use iptables hairpin NAT.",
+	},
+
+	{
+		ID:     "DAEMON-008",
+		Domain: "Docker",
+		Title:  "Live Restore Enabled",
+		Description: "Without live-restore, all containers stop when the Docker daemon restarts " +
+			"for an upgrade, causing unnecessary downtime.",
+		Severity: SeverityLow,
+		Type:     ControlPreventive,
+		Compliance: ComplianceMapping{
+			CISDockerSection: "2.15",
+			NIST80053:        "CP-10",
+			NIST800190:       "§4.4.3",
+			ISO27001:         "A.5.29, A.5.30",
+			SOC2:             "A1.2",
+			DISACCI:          "N/A",
+		},
+		Remediation: "Set \"live-restore\": true in daemon.json to keep containers running " +
+			"during daemon upgrades.",
 	},
 
 	// ── Domain: Image ───────────────────────────────────────────────────────── //
@@ -205,11 +305,11 @@ var AllControls = []Control{
 		Type:     ControlPreventive,
 		Compliance: ComplianceMapping{
 			CISDockerSection: "4.1, 4.2",
-			NIST80053:        "CM-14, SI-7",
-			NIST800190:       "§4.2",
-			ISO27001:         "A.14.2.1, A.14.2.9",
+			NIST80053:        "CM-14, SI-7, SR-4",
+			NIST800190:       "§4.1.5, §4.2.2",
+			ISO27001:         "A.8.25, A.8.9",
 			SOC2:             "CC6.1",
-			DISACCI:          "CCI-001762",
+			DISACCI:          "N/A",
 		},
 		Remediation: "Replace all FROM and image: fields with @sha256: digest references. " +
 			"Automate digest pinning in CI with crane digest or skopeo inspect.",
@@ -225,9 +325,9 @@ var AllControls = []Control{
 		Compliance: ComplianceMapping{
 			CISDockerSection: "4.10",
 			NIST80053:        "IA-5, SC-28",
-			NIST800190:       "§4.2",
-			ISO27001:         "A.9.4.3, A.10.1.1",
-			SOC2:             "CC6.1",
+			NIST800190:       "§4.1.4",
+			ISO27001:         "A.5.17, A.8.12, A.8.24",
+			SOC2:             "CC6.1, CC6.7",
 			DISACCI:          "CCI-000366, CCI-002367",
 		},
 		Remediation: "Scan Dockerfiles and history with trivy --scanners secret and truffleHog. " +
@@ -243,11 +343,11 @@ var AllControls = []Control{
 		Type:     ControlDetective,
 		Compliance: ComplianceMapping{
 			CISDockerSection: "4.4",
-			NIST80053:        "RA-5, SI-2",
-			NIST800190:       "§4.2",
-			ISO27001:         "A.12.6.1",
+			NIST80053:        "CA-7, RA-5, SR-10, SI-2",
+			NIST800190:       "§3.1.1, §4.1.1",
+			ISO27001:         "A.8.8, A.8.26, A.5.7",
 			SOC2:             "CC7.1",
-			DISACCI:          "CCI-002617",
+			DISACCI:          "CCI-001067",
 		},
 		Remediation: "Integrate Trivy or Snyk in CI. Fail pipeline on CRITICAL or HIGH (unfixed). " +
 			"Enable continuous scanning in ECR Enhanced Scanning or GCP Artifact Analysis.",
@@ -265,8 +365,8 @@ var AllControls = []Control{
 		Compliance: ComplianceMapping{
 			CISDockerSection: "4.8",
 			NIST80053:        "AC-6, CM-7",
-			NIST800190:       "§4.2",
-			ISO27001:         "A.12.6.1",
+			NIST800190:       "§4.1.2",
+			ISO27001:         "A.8.8, A.8.9",
 			SOC2:             "CC6.1",
 			DISACCI:          "CCI-002235",
 		},
@@ -285,9 +385,9 @@ var AllControls = []Control{
 		Compliance: ComplianceMapping{
 			CISDockerSection: "4.1",
 			NIST80053:        "AC-6, IA-5",
-			NIST800190:       "§4.3",
-			ISO27001:         "A.9.4.1",
-			SOC2:             "CC6.1",
+			NIST800190:       "§4.1.2, §4.4.3",
+			ISO27001:         "A.8.3, A.8.9",
+			SOC2:             "CC6.1, CC6.3",
 			DISACCI:          "CCI-002235",
 		},
 		Remediation: "Add USER <non-root-uid> as the last non-CMD instruction in Dockerfile. " +
@@ -304,9 +404,9 @@ var AllControls = []Control{
 		Compliance: ComplianceMapping{
 			CISDockerSection: "4.9",
 			NIST80053:        "SI-7, CM-14",
-			NIST800190:       "§4.2",
-			ISO27001:         "A.14.2.1",
-			SOC2:             "CC6.1",
+			NIST800190:       "§4.1.5",
+			ISO27001:         "A.8.25, A.8.28",
+			SOC2:             "CC6.1, CC6.8",
 			DISACCI:          "CCI-001762",
 		},
 		Remediation: "Replace ADD <url> with RUN curl -fsSL <url> | sha256sum -c <checksum>. " +
@@ -325,9 +425,9 @@ var AllControls = []Control{
 		Compliance: ComplianceMapping{
 			CISDockerSection: "4.10",
 			NIST80053:        "IA-5, SC-28",
-			NIST800190:       "§4.2",
-			ISO27001:         "A.9.4.3, A.10.1.1",
-			SOC2:             "CC6.1",
+			NIST800190:       "§4.1.4",
+			ISO27001:         "A.5.17, A.8.12, A.8.24",
+			SOC2:             "CC6.1, CC6.7",
 			DISACCI:          "CCI-000366, CCI-002367",
 		},
 		Remediation: "Add all secret/key file patterns to .dockerignore. " +
@@ -348,9 +448,9 @@ var AllControls = []Control{
 		Type:     ControlPreventive,
 		Compliance: ComplianceMapping{
 			CISDockerSection: "4.4",
-			NIST80053:        "SI-2, RA-5",
-			NIST800190:       "§4.2",
-			ISO27001:         "A.12.6.1",
+			NIST80053:        "SA-22, SI-2, RA-5",
+			NIST800190:       "§4.1.1",
+			ISO27001:         "A.8.8, A.5.7",
 			SOC2:             "CC7.1",
 			DISACCI:          "CCI-002617",
 		},
@@ -370,10 +470,10 @@ var AllControls = []Control{
 		Type:     ControlDetective,
 		Compliance: ComplianceMapping{
 			CISDockerSection: "N/A",
-			NIST80053:        "SI-3, SI-7",
-			NIST800190:       "§4.2",
-			ISO27001:         "A.12.2.1, A.14.2.9",
-			SOC2:             "CC6.1",
+			NIST80053:        "SI-3, SI-7, SR-11(3)",
+			NIST800190:       "§3.1.3, §4.1.3",
+			ISO27001:         "A.8.7, A.5.7",
+			SOC2:             "CC6.1, CC6.8",
 			DISACCI:          "CCI-001764",
 		},
 		Remediation: "Pull images only from trusted, verified registries. " +
@@ -393,15 +493,75 @@ var AllControls = []Control{
 		Type:     ControlPreventive,
 		Compliance: ComplianceMapping{
 			CISDockerSection: "4.4",
-			NIST80053:        "SI-2, RA-5, SI-7",
-			NIST800190:       "§4.2",
-			ISO27001:         "A.12.6.1",
-			SOC2:             "CC7.1",
-			DISACCI:          "CCI-002617",
+			NIST80053:        "SI-2, RA-5, SI-7, SR-4, SR-11",
+			NIST800190:       "§3.1.3, §3.1.1, §4.1.3, §4.1.1",
+			ISO27001:         "A.8.8, A.8.7, A.5.7",
+			SOC2:             "CC7.1, CC6.8",
+			DISACCI:          "CCI-001241",
 		},
 		Remediation: "Downgrade to xz-utils <= 5.4.x (5.4.6 is confirmed safe). " +
 			"Rebuild all images from known-good base layers post-March 2024. " +
 			"Scan with: trivy image <image> | grep xz  or  snyk container test <image>.",
+	},
+
+	{
+		ID:     "IMAGE-011",
+		Domain: "Docker",
+		Title:  "No Unnecessary Debug/Dev Tools Installed",
+		Description: "Debug tools (vim, gdb, strace, tcpdump, nmap) in production images " +
+			"provide attackers with ready-made reconnaissance and exploitation utilities.",
+		Severity: SeverityMedium,
+		Type:     ControlPreventive,
+		Compliance: ComplianceMapping{
+			CISDockerSection: "4.3",
+			NIST80053:        "CM-7, SI-7",
+			NIST800190:       "§4.1.2",
+			ISO27001:         "A.8.19, A.8.9",
+			SOC2:             "CC6.1",
+			DISACCI:          "CCI-000381",
+		},
+		Remediation: "Remove debug and development tools from production images. " +
+			"Use multi-stage builds to exclude build-time tools from the final image.",
+	},
+
+	{
+		ID:     "IMAGE-012",
+		Domain: "Docker",
+		Title:  "Package Manager Verification Enabled",
+		Description: "Disabling GPG verification (--no-check-gpg, --allow-unauthenticated, " +
+			"--trusted-host) allows installation of tampered or malicious packages.",
+		Severity: SeverityMedium,
+		Type:     ControlPreventive,
+		Compliance: ComplianceMapping{
+			CISDockerSection: "4.11",
+			NIST80053:        "SI-7",
+			NIST800190:       "§4.1.5",
+			ISO27001:         "A.8.19, A.8.24",
+			SOC2:             "CC6.1, CC6.8",
+			DISACCI:          "CCI-001749",
+		},
+		Remediation: "Never use --allow-unauthenticated, --no-check-gpg, or pip --trusted-host. " +
+			"Ensure package repositories use valid GPG signatures.",
+	},
+
+	{
+		ID:     "IMAGE-013",
+		Domain: "Docker",
+		Title:  "VOLUME Not Targeting Sensitive Paths",
+		Description: "VOLUME directives on /etc, /root, /var/run, or /tmp can bypass " +
+			"read-only root filesystem protections and expose sensitive host paths.",
+		Severity: SeverityMedium,
+		Type:     ControlPreventive,
+		Compliance: ComplianceMapping{
+			CISDockerSection: "N/A",
+			NIST80053:        "CM-7, AC-6",
+			NIST800190:       "§4.1.2, §4.4.3",
+			ISO27001:         "A.8.3, A.8.9",
+			SOC2:             "CC6.1",
+			DISACCI:          "CCI-000366",
+		},
+		Remediation: "Avoid VOLUME for sensitive paths (/etc, /root, /var/run, /tmp). " +
+			"Use specific application data paths instead.",
 	},
 
 	{
@@ -417,12 +577,53 @@ var AllControls = []Control{
 		Compliance: ComplianceMapping{
 			CISDockerSection: "4.9",
 			NIST80053:        "CM-7, SI-7",
-			NIST800190:       "§4.2",
-			ISO27001:         "A.12.5.1",
+			NIST800190:       "§4.1.2",
+			ISO27001:         "A.8.19, A.8.28",
 			SOC2:             "CC6.1",
+			DISACCI:          "CCI-000381",
 		},
 		Remediation: "Replace ADD with COPY for local file transfers. " +
 			"Only keep ADD when tar auto-extraction is intentional and documented.",
+	},
+
+	{
+		ID:     "IMAGE-015",
+		Domain: "Docker",
+		Title:  "Minimal Base Image / Multi-Stage Build",
+		Description: "Non-minimal base images (with shell, package managers) increase " +
+			"attack surface. Multi-stage builds reduce final image to runtime-only dependencies.",
+		Severity: SeverityLow,
+		Type:     ControlPreventive,
+		Compliance: ComplianceMapping{
+			CISDockerSection: "4.3",
+			NIST80053:        "CM-7",
+			NIST800190:       "§4.1.2, §4.5.1",
+			ISO27001:         "A.8.19, A.8.9",
+			SOC2:             "CC6.1",
+			DISACCI:          "CCI-000381",
+		},
+		Remediation: "Use distroless, scratch, or alpine base images for production. " +
+			"Employ multi-stage builds to exclude build tooling from the final stage.",
+	},
+	
+	{
+		ID:     "IMAGE-016",
+		Domain: "Docker",
+		Title:  "COPY . . Recursive Copy Warning",
+		Description: "COPY . . copies the entire build context including .env, .git, " +
+			"credentials, and other sensitive files into the image layer.",
+		Severity: SeverityMedium,
+		Type:     ControlPreventive,
+		Compliance: ComplianceMapping{
+			CISDockerSection: "4.9",
+			NIST80053:        "CM-7",
+			NIST800190:       "§4.1.2, §4.1.4",
+			ISO27001:         "A.8.3, A.8.28",
+			SOC2:             "CC6.1, CC6.7",
+			DISACCI:          "CCI-000366",
+		},
+		Remediation: "Use specific file paths in COPY instructions instead of COPY . . " +
+			"Maintain a .dockerignore to exclude sensitive files (.env, .git, *.key).",
 	},
 
 	// ── Domain: Runtime ─────────────────────────────────────────────────────── //
@@ -435,16 +636,17 @@ var AllControls = []Control{
 		Severity: SeverityCritical,
 		Type:     ControlPreventive,
 		Compliance: ComplianceMapping{
-			CISDockerSection: "4.1, 5.22",
+			CISDockerSection: "4.1",
 			NIST80053:        "AC-6, IA-5",
-			NIST800190:       "§4.3",
-			ISO27001:         "A.9.4.1",
-			SOC2:             "CC6.1",
+			NIST800190:       "§4.4.3",
+			ISO27001:         "A.8.2, A.8.3, A.8.9",
+			SOC2:             "CC6.1, CC6.3",
 			DISACCI:          "CCI-002235",
 		},
 		Remediation: "Set runAsNonRoot: true and runAsUser: <non-zero> in Pod securityContext. " +
 			"Enforce via OPA/Kyverno admission policy.",
 	},
+
 	{
 		ID:     "RUNTIME-002",
 		Domain: "Docker",
@@ -456,14 +658,15 @@ var AllControls = []Control{
 		Compliance: ComplianceMapping{
 			CISDockerSection: "5.5",
 			NIST80053:        "AC-3, AC-6",
-			NIST800190:       "§4.3",
-			ISO27001:         "A.9.4.1",
-			SOC2:             "CC6.1",
+			NIST800190:       "§3.4.3, §4.4.3",
+			ISO27001:         "A.8.2, A.8.3, A.8.9",
+			SOC2:             "CC6.1, CC6.3",
 			DISACCI:          "CCI-002235",
 		},
 		Remediation: "Set privileged: false in all container securityContexts. " +
 			"Enforce via admission controller. Never use --privileged in production.",
 	},
+
 	{
 		ID:     "RUNTIME-003",
 		Domain: "Docker",
@@ -475,14 +678,15 @@ var AllControls = []Control{
 		Compliance: ComplianceMapping{
 			CISDockerSection: "5.4",
 			NIST80053:        "AC-6, CM-7",
-			NIST800190:       "§4.3",
-			ISO27001:         "A.9.4.1",
-			SOC2:             "CC6.1",
+			NIST800190:       "§4.4.3",
+			ISO27001:         "A.8.2, A.8.3, A.8.9",
+			SOC2:             "CC6.1, CC6.3",
 			DISACCI:          "CCI-000381",
 		},
 		Remediation: "Set capabilities.drop: [ALL] in securityContext. " +
 			"Add back only specific required capabilities (e.g., NET_BIND_SERVICE).",
 	},
+
 	{
 		ID:     "RUNTIME-004",
 		Domain: "Docker",
@@ -494,13 +698,14 @@ var AllControls = []Control{
 		Compliance: ComplianceMapping{
 			CISDockerSection: "5.26",
 			NIST80053:        "AC-6",
-			NIST800190:       "§4.3",
-			ISO27001:         "A.9.4.1",
-			SOC2:             "CC6.1",
+			NIST800190:       "§4.4.3",
+			ISO27001:         "A.8.2, A.8.3, A.8.9",
+			SOC2:             "CC6.1, CC6.3",
 			DISACCI:          "CCI-002235",
 		},
 		Remediation: "Set allowPrivilegeEscalation: false in container securityContext.",
 	},
+
 	{
 		ID:     "RUNTIME-005",
 		Domain: "Docker",
@@ -512,14 +717,15 @@ var AllControls = []Control{
 		Compliance: ComplianceMapping{
 			CISDockerSection: "5.13",
 			NIST80053:        "SI-7, CM-5",
-			NIST800190:       "§4.3",
-			ISO27001:         "A.12.4.3, A.14.2.1",
+			NIST800190:       "§4.4.3, §4.4.4",
+			ISO27001:         "A.8.3, A.8.9",
 			SOC2:             "CC6.1",
 			DISACCI:          "CCI-001813",
 		},
 		Remediation: "Set readOnlyRootFilesystem: true. " +
 			"Mount emptyDir volumes for /tmp and any required write paths.",
 	},
+
 	{
 		ID:     "RUNTIME-006",
 		Domain: "Docker",
@@ -531,13 +737,14 @@ var AllControls = []Control{
 		Compliance: ComplianceMapping{
 			CISDockerSection: "5.10, 5.16, 5.17, 5.21",
 			NIST80053:        "AC-4, AC-6",
-			NIST800190:       "§4.3",
-			ISO27001:         "A.13.1.3",
+			NIST800190:       "§4.4.3, §4.5.5",
+			ISO27001:         "A.8.22, A.8.9",
 			SOC2:             "CC6.1",
 			DISACCI:          "CCI-001090",
 		},
 		Remediation: "Set hostPID: false, hostIPC: false, hostNetwork: false in pod spec.",
 	},
+
 	{
 		ID:     "RUNTIME-007",
 		Domain: "Docker",
@@ -549,14 +756,15 @@ var AllControls = []Control{
 		Compliance: ComplianceMapping{
 			CISDockerSection: "5.11, 5.12",
 			NIST80053:        "SC-5, AU-4",
-			NIST800190:       "§4.3",
-			ISO27001:         "A.12.1.3",
+			NIST800190:       "§4.4.3",
+			ISO27001:         "A.8.6, A.8.9",
 			SOC2:             "A1.1",
 			DISACCI:          "CCI-001094, CCI-001095",
 		},
 		Remediation: "Set resources.requests and resources.limits for memory and CPU on all containers. " +
 			"Enforce via LimitRange and ResourceQuota in each namespace.",
 	},
+
 	{
 		ID:     "RUNTIME-008",
 		Domain: "Docker",
@@ -568,14 +776,15 @@ var AllControls = []Control{
 		Compliance: ComplianceMapping{
 			CISDockerSection: "5.22",
 			NIST80053:        "AC-3, SI-3",
-			NIST800190:       "§4.4",
-			ISO27001:         "A.14.2.1",
+			NIST800190:       "§4.4.3",
+			ISO27001:         "A.8.3, A.8.9",
 			SOC2:             "CC6.1",
 			DISACCI:          "CCI-000381",
 		},
 		Remediation: "Set seccompProfile.type: RuntimeDefault in pod securityContext. " +
 			"Use custom profile for workloads requiring specific syscalls.",
 	},
+
 	{
 		ID:     "RUNTIME-009",
 		Domain: "Docker",
@@ -587,13 +796,158 @@ var AllControls = []Control{
 		Compliance: ComplianceMapping{
 			CISDockerSection: "5.6",
 			NIST80053:        "AC-3",
-			NIST800190:       "§4.3",
-			ISO27001:         "A.9.4.1",
+			NIST800190:       "§3.5.5, §4.5.5",
+			ISO27001:         "A.8.3, A.8.9",
 			SOC2:             "CC6.1",
-			DISACCI:          "CCI-000109",
+			DISACCI:          "CCI-000213",
 		},
 		Remediation: "Audit all hostPath volume mounts. Reject via OPA/Kyverno policy. " +
 			"Use PVC or emptyDir instead.",
+	},
+
+	{
+		ID:     "RUNTIME-010",
+		Domain: "Docker",
+		Title:  "No SSH Daemon in Containers",
+		Description: "Running sshd inside a container bypasses all audit logging, " +
+			"provides an unmonitored lateral movement channel, and violates the principle " +
+			"of least privilege. Use kubectl exec or ephemeral debug containers instead.",
+		Severity: SeverityCritical,
+		Type:     ControlPreventive,
+		Compliance: ComplianceMapping{
+			CISDockerSection: "5.7",
+			NIST80053:        "AC-17, CM-7",
+			NIST800190:       "§4.1.2",
+			ISO27001:         "A.8.20, A.8.9",
+			SOC2:             "CC6.1, CC6.6",
+			DISACCI:          "CCI-000381",
+		},
+		Remediation: "Remove sshd from container images and entrypoints. " +
+			"Deploy Falco rule to alert on sshd execution inside containers. " +
+			"Use kubectl exec or ephemeral debug containers for interactive access.",
+	},
+
+	{
+		ID:     "RUNTIME-011",
+		Domain: "Docker",
+		Title:  "No Privileged Ports Exposed (< 1024)",
+		Description: "Binding to ports below 1024 requires CAP_NET_BIND_SERVICE. " +
+			"Application services must use non-privileged ports (>= 1024) and rely " +
+			"on Kubernetes Services to expose them externally on standard ports.",
+		Severity: SeverityHigh,
+		Type:     ControlPreventive,
+		Compliance: ComplianceMapping{
+			CISDockerSection: "5.8",
+			NIST80053:        "AC-6, CM-7",
+			NIST800190:       "§4.4.3",
+			ISO27001:         "A.8.3, A.8.9",
+			SOC2:             "CC6.1, CC6.3",
+			DISACCI:          "CCI-001762",
+		},
+		Remediation: "Move the service to port >= 1024 in application configuration. " +
+			"Use a Kubernetes Service to expose the application externally on the standard port.",
+	},
+
+	{
+		ID:     "RUNTIME-012",
+		Domain: "Docker",
+		Title:  "Liveness and Readiness Probes Configured",
+		Description: "Without health probes, Docker/Kubernetes cannot detect a degraded or " +
+			"hung container and continues routing traffic to it or fails to restart it. " +
+			"Both probes are required for availability compliance under RMF.",
+		Severity: SeverityHigh,
+		Type:     ControlDetective,
+		Compliance: ComplianceMapping{
+			CISDockerSection: "N/A",
+			NIST80053:        "CP-10, SI-17",
+			NIST800190:       "§4.4.4",
+			ISO27001:         "A.5.30, A.8.16",
+			SOC2:             "A1.2",
+			DISACCI:          "N/A",
+		},
+		Remediation: "Define livenessProbe and readinessProbe for all containers. " +
+			"Use exec probe for databases (pg_isready), HTTP probe for web services. " +
+			"Set appropriate initialDelaySeconds to avoid premature kills.",
+	},
+	
+	{
+		ID:     "RUNTIME-013",
+		Domain: "Kubernetes",
+		Title:  "AppArmor / SELinux Profile Configured",
+		Description: "Without AppArmor or SELinux profiles, containers lack mandatory " +
+			"access control enforcement, increasing container escape risk.",
+		Severity: SeverityMedium,
+		Type:     ControlPreventive,
+		Compliance: ComplianceMapping{
+			CISDockerSection: "5.2, 5.3",
+			NIST80053:        "AC-3, AC-6",
+			NIST800190:       "§4.4.3",
+			ISO27001:         "A.8.3, A.8.9",
+			SOC2:             "CC6.1, CC6.3",
+			DISACCI:          "CCI-002235",
+		},
+		Remediation: "Add container.apparmor.security.beta.kubernetes.io annotation " +
+			"or configure seLinuxOptions in pod/container securityContext.",
+	},
+
+	{
+		ID:     "RUNTIME-014",
+		Domain: "Kubernetes",
+		Title:  "Default Service Account Not Automounted",
+		Description: "Automounting the default service account token gives every pod " +
+			"a credential that may have excessive RBAC permissions.",
+		Severity: SeverityMedium,
+		Type:     ControlPreventive,
+		Compliance: ComplianceMapping{
+			CISDockerSection: "N/A",
+			NIST80053:        "AC-2, AC-6",
+			NIST800190:       "§4.3.1",
+			ISO27001:         "A.8.3, A.8.9",
+			SOC2:             "CC6.1, CC6.3",
+			DISACCI:          "CCI-000366",
+		},
+		Remediation: "Set automountServiceAccountToken: false in pod spec. " +
+			"Create dedicated service accounts with minimal RBAC for pods that need API access.",
+	},
+
+	{
+		ID:     "RUNTIME-015",
+		Domain: "Docker",
+		Title:  "Container ulimits Explicitly Set",
+		Description: "Without explicit ulimits, containers inherit host defaults for " +
+			"open files and processes, enabling fork bombs and file descriptor exhaustion.",
+		Severity: SeverityLow,
+		Type:     ControlPreventive,
+		Compliance: ComplianceMapping{
+			CISDockerSection: "5.19",
+			NIST80053:        "SC-5",
+			NIST800190:       "§4.4.3",
+			ISO27001:         "A.8.6, A.8.9",
+			SOC2:             "A1.1",
+			DISACCI:          "CCI-000366",
+		},
+		Remediation: "Set ulimits in Docker Compose (ulimits: nofile: 65535, nproc: 4096). " +
+			"In Kubernetes, use LimitRange or PodSecurityPolicy for resource constraints.",
+	},
+
+	{
+		ID:     "RUNTIME-016",
+		Domain: "Docker",
+		Title:  "Restart Policy Capped",
+		Description: "restart: always without a retry cap can cause crash-loop resource " +
+			"exhaustion. Use on-failure with max_retries to prevent infinite restarts.",
+		Severity: SeverityLow,
+		Type:     ControlPreventive,
+		Compliance: ComplianceMapping{
+			CISDockerSection: "5.15",
+			NIST80053:        "SC-5",
+			NIST800190:       "§4.4.3",
+			ISO27001:         "A.8.6, A.5.30",
+			SOC2:             "A1.1, A1.2",
+			DISACCI:          "CCI-000366",
+		},
+		Remediation: "Use restart: on-failure:5 instead of restart: always. " +
+			"In Compose v3+, use deploy.restart_policy with max_attempts.",
 	},
 
 	// ── Domain: Network ─────────────────────────────────────────────────────── //
@@ -606,16 +960,17 @@ var AllControls = []Control{
 		Severity: SeverityCritical,
 		Type:     ControlPreventive,
 		Compliance: ComplianceMapping{
-			CISDockerSection: "5.10",
+			CISDockerSection: "N/A",
 			NIST80053:        "SC-7, AC-4",
-			NIST800190:       "§4.3",
-			ISO27001:         "A.13.1.1, A.13.1.3",
+			NIST800190:       "§3.3.3, §3.4.2, §4.3.3, §4.4.2",
+			ISO27001:         "A.8.20, A.8.22",
 			SOC2:             "CC6.6",
 			DISACCI:          "CCI-001090",
 		},
 		Remediation: "Apply default-deny-all NetworkPolicy to every namespace. " +
 			"Add explicit allow rules for required communication paths.",
 	},
+
 	{
 		ID:     "NETWORK-002",
 		Domain: "Kubernetes",
@@ -625,12 +980,12 @@ var AllControls = []Control{
 		Severity: SeverityCritical,
 		Type:     ControlPreventive,
 		Compliance: ComplianceMapping{
-			CISDockerSection: "5.10",
+			CISDockerSection: "N/A",
 			NIST80053:        "SC-7, IA-5",
-			NIST800190:       "§4.3, §4.5",
-			ISO27001:         "A.13.1.1",
+			NIST800190:       "§4.4.2",
+			ISO27001:         "A.8.20, A.8.23",
 			SOC2:             "CC6.6",
-			DISACCI:          "CCI-001090",
+			DISACCI:          "CCI-001097",
 		},
 		Remediation: "Block 169.254.169.254/32 in egress NetworkPolicy. " +
 			"Set http_put_response_hop_limit: 1 and http_tokens: required (IMDSv2) on instances.",
@@ -648,14 +1003,15 @@ var AllControls = []Control{
 		Compliance: ComplianceMapping{
 			CISDockerSection: "4.10",
 			NIST80053:        "IA-5, SC-28, AC-4",
-			NIST800190:       "§4.2, §4.3",
-			ISO27001:         "A.10.1.1, A.9.4.3",
-			SOC2:             "CC6.1, CC6.2",
+			NIST800190:       "§4.1.4, §4.3",
+			ISO27001:         "A.8.24, A.5.17",
+			SOC2:             "CC6.1, CC6.7",
 			DISACCI:          "CCI-000366, CCI-002367",
 		},
 		Remediation: "Use AWS Secrets Manager, GCP Secret Manager, or HashiCorp Vault. " +
 			"Mount via CSI secrets driver. Enable etcd encryption at rest.",
 	},
+
 	{
 		ID:     "SECRETS-002",
 		Domain: "Secrets",
@@ -665,15 +1021,38 @@ var AllControls = []Control{
 		Severity: SeverityHigh,
 		Type:     ControlPreventive,
 		Compliance: ComplianceMapping{
-			CISDockerSection: "5.32",
+			CISDockerSection: "N/A",
 			NIST80053:        "AC-2, AC-3, AC-6",
-			NIST800190:       "§4.3",
-			ISO27001:         "A.9.1.1, A.9.4.1",
-			SOC2:             "CC6.2",
+			NIST800190:       "§4.3.1",
+			ISO27001:         "A.5.15, A.8.3",
+			SOC2:             "CC6.3",
 			DISACCI:          "CCI-002235",
 		},
 		Remediation: "Restrict secret access by resourceName. Audit with kubectl auth can-i. " +
 			"Remove cluster-admin bindings from non-admin service accounts.",
+	},
+
+	{
+		ID:     "SECRETS-003",
+		Domain: "Secrets",
+		Title:  "AI/Vectorizer API Keys Must Not Be in ENV Vars",
+		Description: "API keys for AI inference providers (OpenAI, Cohere, HuggingFace, " +
+			"Anthropic, Google, Azure) stored as literal ENV vars are visible via " +
+			"kubectl describe pod or docker inspect. These keys have billing and " +
+			"data-access scope beyond the immediate container.",
+		Severity: SeverityHigh,
+		Type:     ControlPreventive,
+		Compliance: ComplianceMapping{
+			CISDockerSection: "4.10",
+			NIST80053:        "IA-5, SC-28",
+			NIST800190:       "§3.1.4, §4.1.4",
+			ISO27001:         "A.5.17, A.8.12, A.8.24",
+			SOC2:             "CC6.1, CC6.7",
+			DISACCI:          "CCI-000366, CCI-002367",
+		},
+		Remediation: "Store AI provider API keys in Kubernetes Secrets or external " +
+			"secrets manager. Inject via valueFrom.secretKeyRef, not literal value. " +
+			"Rotate keys regularly and monitor for unexpected usage.",
 	},
 
 	// ── Domain: Supply Chain ────────────────────────────────────────────────── //
@@ -687,15 +1066,16 @@ var AllControls = []Control{
 		Type:     ControlPreventive,
 		Compliance: ComplianceMapping{
 			CISDockerSection: "4.5, 4.12",
-			NIST80053:        "SI-7, CM-14",
-			NIST800190:       "§4.2",
-			ISO27001:         "A.14.2.9, A.12.5.1",
-			SOC2:             "CC6.1",
-			DISACCI:          "CCI-001762",
+			NIST80053:        "SI-7, CM-14, SR-4(3)",
+			NIST800190:       "§4.1.5, §4.2.3",
+			ISO27001:         "A.8.24, A.8.19",
+			SOC2:             "CC6.1, CC6.8",
+			DISACCI:          "CCI-001749",
 		},
 		Remediation: "Sign images with Cosign (keyless via OIDC or KMS-backed key). " +
 			"Enforce signature verification via Kyverno verifyImages or Connaisseur.",
 	},
+
 	{
 		ID:     "SUPPLY-002",
 		Domain: "Docker",
@@ -706,15 +1086,16 @@ var AllControls = []Control{
 		Type:     ControlDetective,
 		Compliance: ComplianceMapping{
 			CISDockerSection: "4.4, 4.12",
-			NIST80053:        "CM-8, RA-5",
-			NIST800190:       "§4.2",
-			ISO27001:         "A.8.1.1, A.12.6.1",
-			SOC2:             "CC6.1",
-			DISACCI:          "CCI-002617",
+			NIST80053:        "CM-8, RA-5, SR-3, SR-4(4)",
+			NIST800190:       "§4.1.1",
+			ISO27001:         "A.5.9, A.8.8, A.5.7",
+			SOC2:             "CC6.1, CC7.1",
+			DISACCI:          "N/A",
 		},
 		Remediation: "Generate CycloneDX SBOM with Syft in CI. " +
 			"Attest SBOM to image with cosign attest --type cyclonedx.",
 	},
+
 	{
 		ID:     "SUPPLY-003",
 		Domain: "Terraform",
@@ -724,11 +1105,11 @@ var AllControls = []Control{
 		Severity: SeverityHigh,
 		Type:     ControlPreventive,
 		Compliance: ComplianceMapping{
-			CISDockerSection: "4.1",
-			NIST80053:        "CM-2, CM-5",
-			NIST800190:       "§4.2",
-			ISO27001:         "A.14.2.9",
-			SOC2:             "CC6.1",
+			CISDockerSection: "N/A",
+			NIST80053:        "CM-2, CM-5, SR-4",
+			NIST800190:       "§4.2.2",
+			ISO27001:         "A.8.32, A.8.9",
+			SOC2:             "CC6.1, CC6.8",
 			DISACCI:          "CCI-001762",
 		},
 		Remediation: "Set image_tag_mutability = IMMUTABLE in ECR. " +
@@ -746,15 +1127,16 @@ var AllControls = []Control{
 		Type:     ControlDetective,
 		Compliance: ComplianceMapping{
 			CISDockerSection: "N/A",
-			NIST80053:        "AU-12, SI-4, IR-5",
-			NIST800190:       "§4.4",
-			ISO27001:         "A.12.4.1, A.16.1.1",
+			NIST80053:        "AU-12, SI-4, IR-5, IR-4, CA-7",
+			NIST800190:       "§3.4.4, §4.4.4, §4.4.5",
+			ISO27001:         "A.8.15, A.5.24, A.5.7, A.8.16",
 			SOC2:             "CC7.2, CC7.3",
 			DISACCI:          "CCI-000172",
 		},
 		Remediation: "Deploy Falco DaemonSet with eBPF driver. Configure alerts for " +
 			"shell-in-container, write-below-binary-dir, unexpected network connections.",
 	},
+
 	{
 		ID:     "MONITOR-002",
 		Domain: "Kubernetes",
@@ -764,79 +1146,15 @@ var AllControls = []Control{
 		Severity: SeverityCritical,
 		Type:     ControlDetective,
 		Compliance: ComplianceMapping{
-			CISDockerSection: "2.12",
-			NIST80053:        "AU-2, AU-3, AU-12",
-			NIST800190:       "§4.3",
-			ISO27001:         "A.12.4.1",
+			CISDockerSection: "N/A",
+			NIST80053:        "AU-2, AU-3, AU-12, AU-6, CA-7",
+			NIST800190:       "§4.3.2",
+			ISO27001:         "A.8.15, A.8.16",
 			SOC2:             "CC7.2",
 			DISACCI:          "CCI-000172",
 		},
 		Remediation: "Configure audit policy logging secrets at Request level, " +
 			"exec/attach at RequestResponse. Ship to immutable SIEM/SOAR.",
-	},
-
-	// ── Domain: Runtime (continued) ─────────────────────────────────────────── //
-	{
-		ID:     "RUNTIME-010",
-		Domain: "Docker",
-		Title:  "No SSH Daemon in Containers",
-		Description: "Running sshd inside a container bypasses all audit logging, " +
-			"provides an unmonitored lateral movement channel, and violates the principle " +
-			"of least privilege. Use kubectl exec or ephemeral debug containers instead.",
-		Severity: SeverityCritical,
-		Type:     ControlPreventive,
-		Compliance: ComplianceMapping{
-			CISDockerSection: "5.7",
-			NIST80053:        "AC-17, CM-7",
-			NIST800190:       "§4.3",
-			ISO27001:         "A.13.1.1",
-			SOC2:             "CC6.1",
-			DISACCI:          "CCI-000381",
-		},
-		Remediation: "Remove sshd from container images and entrypoints. " +
-			"Deploy Falco rule to alert on sshd execution inside containers. " +
-			"Use kubectl exec or ephemeral debug containers for interactive access.",
-	},
-	{
-		ID:     "RUNTIME-011",
-		Domain: "Docker",
-		Title:  "No Privileged Ports Exposed (< 1024)",
-		Description: "Binding to ports below 1024 requires CAP_NET_BIND_SERVICE. " +
-			"Application services must use non-privileged ports (>= 1024) and rely " +
-			"on Kubernetes Services to expose them externally on standard ports.",
-		Severity: SeverityHigh,
-		Type:     ControlPreventive,
-		Compliance: ComplianceMapping{
-			CISDockerSection: "5.8",
-			NIST80053:        "AC-6, CM-7",
-			NIST800190:       "§4.3",
-			ISO27001:         "A.9.4.1",
-			SOC2:             "CC6.1",
-			DISACCI:          "CCI-001762",
-		},
-		Remediation: "Move the service to port >= 1024 in application configuration. " +
-			"Use a Kubernetes Service to expose the application externally on the standard port.",
-	},
-	{
-		ID:     "RUNTIME-012",
-		Domain: "Docker",
-		Title:  "Liveness and Readiness Probes Configured",
-		Description: "Without health probes, Docker/Kubernetes cannot detect a degraded or " +
-			"hung container and continues routing traffic to it or fails to restart it. " +
-			"Both probes are required for availability compliance under RMF.",
-		Severity: SeverityHigh,
-		Type:     ControlDetective,
-		Compliance: ComplianceMapping{
-			CISDockerSection: "N/A",
-			NIST80053:        "CP-10, SI-17",
-			NIST800190:       "§4.3, §4.4",
-			ISO27001:         "A.17.1.2",
-			SOC2:             "A1.2",
-			DISACCI:          "CCI-002385",
-		},
-		Remediation: "Define livenessProbe and readinessProbe for all containers. " +
-			"Use exec probe for databases (pg_isready), HTTP probe for web services. " +
-			"Set appropriate initialDelaySeconds to avoid premature kills.",
 	},
 
 	// ── Domain: Database ────────────────────────────────────────────────────── //
@@ -853,8 +1171,8 @@ var AllControls = []Control{
 		Compliance: ComplianceMapping{
 			CISDockerSection: "4.3",
 			NIST80053:        "CM-7, AC-6",
-			NIST800190:       "§4.2",
-			ISO27001:         "A.12.6.1",
+			NIST800190:       "§4.1.2",
+			ISO27001:         "A.8.8, A.8.9",
 			SOC2:             "CC6.1",
 			DISACCI:          "CCI-000381",
 		},
@@ -862,6 +1180,7 @@ var AllControls = []Control{
 			"debug image (-debug tag) never deployed to production. " +
 			"Use kubectl debug ephemeral containers for investigations.",
 	},
+
 	{
 		ID:     "DB-IMAGE-002",
 		Domain: "Database",
@@ -873,17 +1192,18 @@ var AllControls = []Control{
 		Severity: SeverityCritical,
 		Type:     ControlPreventive,
 		Compliance: ComplianceMapping{
-			CISDockerSection: "4.1, 5.7",
+			CISDockerSection: "N/A",
 			NIST80053:        "IA-2, AC-3, CM-6",
-			NIST800190:       "§4.3",
-			ISO27001:         "A.9.4.2, A.9.4.3",
-			SOC2:             "CC6.1",
+			NIST800190:       "§4.1.2",
+			ISO27001:         "A.8.5, A.5.17",
+			SOC2:             "CC6.1, CC6.3",
 			DISACCI:          "CCI-000366, CCI-002235",
 		},
 		Remediation: "Audit all database container CMD and Entrypoint values. " +
 			"Remove --skip-grant-tables, --local-infile=1, --secure-file-priv= (empty). " +
 			"Ensure MongoDB uses --auth. Use configmap-mounted config files instead of flags.",
 	},
+
 	{
 		ID:     "DB-K8S-001",
 		Domain: "Database",
@@ -896,17 +1216,18 @@ var AllControls = []Control{
 		Severity: SeverityCritical,
 		Type:     ControlPreventive,
 		Compliance: ComplianceMapping{
-			CISDockerSection: "4.10, 5.7",
+			CISDockerSection: "4.10",
 			NIST80053:        "IA-2, AC-3, IA-5",
-			NIST800190:       "§4.3",
-			ISO27001:         "A.9.4.2, A.9.4.3",
-			SOC2:             "CC6.1",
+			NIST800190:       "§4.1.2, §4.1.4",
+			ISO27001:         "A.8.5, A.5.17",
+			SOC2:             "CC6.1, CC6.2",
 			DISACCI:          "CCI-000366, CCI-002235",
 		},
 		Remediation: "Remove all auth-disabling ENV vars. Use POSTGRES_HOST_AUTH_METHOD=scram-sha-256. " +
 			"Set NEO4J_AUTH to a non-default value. Set AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED=false. " +
 			"Never set SPRING_H2_CONSOLE_ENABLED=true in production.",
 	},
+
 	{
 		ID:     "DB-K8S-002",
 		Domain: "Database",
@@ -919,15 +1240,16 @@ var AllControls = []Control{
 		Compliance: ComplianceMapping{
 			CISDockerSection: "4.10",
 			NIST80053:        "IA-2, IA-5, AC-3",
-			NIST800190:       "§4.3",
-			ISO27001:         "A.9.4.2",
-			SOC2:             "CC6.1",
+			NIST800190:       "§4.1.2, §4.1.4",
+			ISO27001:         "A.8.5, A.8.9",
+			SOC2:             "CC6.1, CC6.2",
 			DISACCI:          "CCI-000366",
 		},
 		Remediation: "Qdrant: set QDRANT__SERVICE__API_KEY. Chroma: set CHROMA_SERVER_AUTH_PROVIDER. " +
 			"Milvus: set MILVUS_ROOT_PASSWORD. Weaviate: set AUTHENTICATION_APIKEY_ENABLED=true. " +
 			"Redis: mount redis.conf with requirepass. MongoDB: ensure --auth in CMD.",
 	},
+
 	{
 		ID:     "DB-K8S-003",
 		Domain: "Database",
@@ -939,10 +1261,10 @@ var AllControls = []Control{
 		Severity: SeverityCritical,
 		Type:     ControlPreventive,
 		Compliance: ComplianceMapping{
-			CISDockerSection: "5.10",
+			CISDockerSection: "N/A",
 			NIST80053:        "SC-7, AC-4",
-			NIST800190:       "§4.5",
-			ISO27001:         "A.13.1.1, A.13.1.3",
+			NIST800190:       "§4.3.3, §4.4.2",
+			ISO27001:         "A.8.20, A.8.22",
 			SOC2:             "CC6.6",
 			DISACCI:          "CCI-001090",
 		},
@@ -950,6 +1272,7 @@ var AllControls = []Control{
 			"Use Ingress with TLS for application API access. " +
 			"Never expose raw database ports via NodePort or LoadBalancer.",
 	},
+
 	{
 		ID:     "DB-K8S-004",
 		Domain: "Database",
@@ -961,16 +1284,17 @@ var AllControls = []Control{
 		Severity: SeverityHigh,
 		Type:     ControlPreventive,
 		Compliance: ComplianceMapping{
-			CISDockerSection: "5.13",
+			CISDockerSection: "N/A",
 			NIST80053:        "CP-9, SI-12",
 			NIST800190:       "§4.3",
-			ISO27001:         "A.12.3.1, A.17.1.2",
+			ISO27001:         "A.8.13, A.5.30",
 			SOC2:             "A1.2",
 			DISACCI:          "CCI-000366",
 		},
 		Remediation: "Mount the database data directory from a PersistentVolumeClaim. " +
 			"Use emptyDir with medium: Memory only for socket/pid directories.",
 	},
+
 	{
 		ID:     "DB-K8S-005",
 		Domain: "Database",
@@ -982,16 +1306,17 @@ var AllControls = []Control{
 		Severity: SeverityMedium,
 		Type:     ControlPreventive,
 		Compliance: ComplianceMapping{
-			CISDockerSection: "4.1",
+			CISDockerSection: "N/A",
 			NIST80053:        "AC-3, AC-6",
-			NIST800190:       "§4.3",
-			ISO27001:         "A.9.4.1",
+			NIST800190:       "§4.1.2, §4.1.4",
+			ISO27001:         "A.8.3, A.8.9",
 			SOC2:             "CC6.1",
 			DISACCI:          "CCI-002235",
 		},
 		Remediation: "Set spec.securityContext.fsGroup to the database process GID " +
 			"(999 for postgres/mongo, 7474 for neo4j, 1000 for most others).",
 	},
+
 	{
 		ID:     "DB-K8S-006",
 		Domain: "Database",
@@ -1004,14 +1329,15 @@ var AllControls = []Control{
 		Compliance: ComplianceMapping{
 			CISDockerSection: "4.10",
 			NIST80053:        "IA-5, SC-28",
-			NIST800190:       "§4.2",
-			ISO27001:         "A.9.4.3, A.10.1.1",
-			SOC2:             "CC6.1",
+			NIST800190:       "§4.1.4",
+			ISO27001:         "A.5.17, A.8.12, A.8.24",
+			SOC2:             "CC6.1, CC6.7",
 			DISACCI:          "CCI-000366, CCI-002367",
 		},
 		Remediation: "Remove all connection strings, passwords, and API keys from " +
 			"pod annotations and labels. Reference secret names only (not values).",
 	},
+
 	{
 		ID:     "DB-K8S-007",
 		Domain: "Database",
@@ -1023,10 +1349,10 @@ var AllControls = []Control{
 		Severity: SeverityHigh,
 		Type:     ControlPreventive,
 		Compliance: ComplianceMapping{
-			CISDockerSection: "5.10",
+			CISDockerSection: "N/A",
 			NIST80053:        "SC-7, SI-10",
-			NIST800190:       "§4.5",
-			ISO27001:         "A.13.1.1",
+			NIST800190:       "§4.4.2",
+			ISO27001:         "A.8.20, A.8.23",
 			SOC2:             "CC6.6",
 			DISACCI:          "CCI-001090",
 		},
@@ -1034,28 +1360,7 @@ var AllControls = []Control{
 			"NEO4J_dbms_security_allow__csv__import__from__file__urls=false. " +
 			"Enforce egress NetworkPolicy blocking 169.254.169.254/32.",
 	},
-	{
-		ID:     "SECRETS-003",
-		Domain: "Secrets",
-		Title:  "AI/Vectorizer API Keys Must Not Be in ENV Vars",
-		Description: "API keys for AI inference providers (OpenAI, Cohere, HuggingFace, " +
-			"Anthropic, Google, Azure) stored as literal ENV vars are visible via " +
-			"kubectl describe pod or docker inspect. These keys have billing and " +
-			"data-access scope beyond the immediate container.",
-		Severity: SeverityHigh,
-		Type:     ControlPreventive,
-		Compliance: ComplianceMapping{
-			CISDockerSection: "4.10",
-			NIST80053:        "IA-5, SC-28",
-			NIST800190:       "§4.2",
-			ISO27001:         "A.9.4.3, A.10.1.1",
-			SOC2:             "CC6.1",
-			DISACCI:          "CCI-000366, CCI-002367",
-		},
-		Remediation: "Store AI provider API keys in Kubernetes Secrets or external " +
-			"secrets manager. Inject via valueFrom.secretKeyRef, not literal value. " +
-			"Rotate keys regularly and monitor for unexpected usage.",
-	},
+
 	{
 		ID:     "DB-TF-001",
 		Domain: "Database",
@@ -1069,15 +1374,16 @@ var AllControls = []Control{
 		Compliance: ComplianceMapping{
 			CISDockerSection: "N/A",
 			NIST80053:        "SC-28, CP-9, SI-12",
-			NIST800190:       "§4.2",
-			ISO27001:         "A.10.1.1, A.12.3.1",
+			NIST800190:       "§4.1.4, §4.4.2",
+			ISO27001:         "A.8.24, A.8.13, A.5.23",
 			SOC2:             "CC6.1, A1.2",
-			DISACCI:          "CCI-000366, CCI-002418",
+			DISACCI:          "CCI-000366, CCI-002418, CCI-002476",
 		},
 		Remediation: "Set storage_encrypted=true, publicly_accessible=false, " +
 			"deletion_protection=true, backup_retention_period>=7, " +
 			"iam_database_authentication_enabled=true, skip_final_snapshot=false.",
 	},
+
 	{
 		ID:     "DB-TF-002",
 		Domain: "Database",
@@ -1091,14 +1397,15 @@ var AllControls = []Control{
 		Compliance: ComplianceMapping{
 			CISDockerSection: "N/A",
 			NIST80053:        "SC-8, SC-28, IA-5",
-			NIST800190:       "§4.3",
-			ISO27001:         "A.10.1.1, A.13.2.3",
+			NIST800190:       "§4.1.4, §4.4.2",
+			ISO27001:         "A.8.24, A.5.14, A.5.23",
 			SOC2:             "CC6.1, CC6.7",
 			DISACCI:          "CCI-000366, CCI-002418",
 		},
 		Remediation: "Set at_rest_encryption_enabled=true, transit_encryption_enabled=true, " +
 			"and provide a strong auth_token. Enable automatic_failover_enabled=true.",
 	},
+
 	{
 		ID:     "DB-TF-003",
 		Domain: "Database",
@@ -1111,8 +1418,8 @@ var AllControls = []Control{
 		Compliance: ComplianceMapping{
 			CISDockerSection: "N/A",
 			NIST80053:        "SC-28, CP-9",
-			NIST800190:       "§4.2",
-			ISO27001:         "A.10.1.1, A.12.3.1",
+			NIST800190:       "§4.1.4",
+			ISO27001:         "A.8.24, A.8.13, A.5.23",
 			SOC2:             "CC6.1, A1.2",
 			DISACCI:          "CCI-000366",
 		},
@@ -1133,8 +1440,8 @@ var AllControls = []Control{
 		Compliance: ComplianceMapping{
 			CISDockerSection: "N/A",
 			NIST80053:        "AC-3, AC-6",
-			NIST800190:       "§4.2",
-			ISO27001:         "A.9.1.2, A.13.1.3",
+			NIST800190:       "§4.4.2",
+			ISO27001:         "A.5.15, A.8.3, A.8.22, A.5.23",
 			SOC2:             "CC6.1, CC6.3",
 			DISACCI:          "CCI-000213",
 		},
@@ -1142,6 +1449,7 @@ var AllControls = []Control{
 			"block_public_acls = true, block_public_policy = true, " +
 			"ignore_public_acls = true, restrict_public_buckets = true.",
 	},
+
 	{
 		ID:     "TF-002",
 		Domain: "Terraform",
@@ -1153,14 +1461,15 @@ var AllControls = []Control{
 		Compliance: ComplianceMapping{
 			CISDockerSection: "N/A",
 			NIST80053:        "CP-9",
-			NIST800190:       "§4.2",
-			ISO27001:         "A.12.3.1",
+			NIST800190:       "§4.2, §4.5",
+			ISO27001:         "A.8.13, A.5.23",
 			SOC2:             "A1.2",
 			DISACCI:          "CCI-000366",
 		},
 		Remediation: "Add versioning { enabled = true } to aws_s3_bucket resource " +
 			"or use aws_s3_bucket_versioning with versioning_configuration { status = \"Enabled\" }.",
 	},
+
 	{
 		ID:     "TF-003",
 		Domain: "Terraform",
@@ -1172,14 +1481,15 @@ var AllControls = []Control{
 		Compliance: ComplianceMapping{
 			CISDockerSection: "5.5",
 			NIST80053:        "AC-6, CM-7",
-			NIST800190:       "§4.3",
-			ISO27001:         "A.9.4.4",
-			SOC2:             "CC6.1",
+			NIST800190:       "§4.4.3",
+			ISO27001:         "A.8.18, A.5.23, A.8.9",
+			SOC2:             "CC6.1, CC6.3",
 			DISACCI:          "CCI-000381",
 		},
 		Remediation: "Set \"privileged\": false in container_definitions JSON. " +
 			"Use specific Linux capabilities via linuxParameters instead of privileged mode.",
 	},
+
 	{
 		ID:     "TF-004",
 		Domain: "Terraform",
@@ -1191,14 +1501,15 @@ var AllControls = []Control{
 		Compliance: ComplianceMapping{
 			CISDockerSection: "4.1",
 			NIST80053:        "AC-6",
-			NIST800190:       "§4.3",
-			ISO27001:         "A.9.4.4",
-			SOC2:             "CC6.1",
+			NIST800190:       "§4.4.3, §4.1.2",
+			ISO27001:         "A.8.18, A.5.23, A.8.9",
+			SOC2:             "CC6.1, CC6.3",
 			DISACCI:          "CCI-000366",
 		},
 		Remediation: "Add \"user\": \"nonroot\" or a numeric UID to each container definition. " +
 			"Build images with a non-root USER directive.",
 	},
+
 	{
 		ID:     "TF-005",
 		Domain: "Terraform",
@@ -1210,14 +1521,15 @@ var AllControls = []Control{
 		Compliance: ComplianceMapping{
 			CISDockerSection: "5.13",
 			NIST80053:        "CM-7, SI-7",
-			NIST800190:       "§4.3",
-			ISO27001:         "A.12.6.2",
+			NIST800190:       "§4.4.3",
+			ISO27001:         "A.8.19, A.5.23, A.8.9",
 			SOC2:             "CC6.1",
 			DISACCI:          "CCI-000366",
 		},
 		Remediation: "Set \"readonlyRootFilesystem\": true in container definitions. " +
 			"Use tmpfs mounts or EFS for paths that need writes.",
 	},
+
 	{
 		ID:     "TF-006",
 		Domain: "Terraform",
@@ -1229,14 +1541,15 @@ var AllControls = []Control{
 		Compliance: ComplianceMapping{
 			CISDockerSection: "N/A",
 			NIST80053:        "SC-7, AC-17",
-			NIST800190:       "§4.5",
-			ISO27001:         "A.13.1.1, A.13.1.3",
+			NIST800190:       "§4.4.2, §4.5",
+			ISO27001:         "A.8.20, A.8.22, A.5.23",
 			SOC2:             "CC6.6",
-			DISACCI:          "CCI-001090",
+			DISACCI:          "CCI-001097",
 		},
 		Remediation: "Restrict ingress CIDR blocks to known IP ranges. " +
 			"Never use 0.0.0.0/0 or ::/0 for sensitive ports. Use VPN or bastion hosts.",
 	},
+
 	{
 		ID:     "TF-007",
 		Domain: "Terraform",
@@ -1248,15 +1561,16 @@ var AllControls = []Control{
 		Compliance: ComplianceMapping{
 			CISDockerSection: "N/A",
 			NIST80053:        "SC-28",
-			NIST800190:       "§4.2",
-			ISO27001:         "A.10.1.1",
-			SOC2:             "CC6.1",
+			NIST800190:       "§4.1.4",
+			ISO27001:         "A.8.24, A.5.23",
+			SOC2:             "CC6.1, CC6.7",
 			DISACCI:          "CCI-002476",
 		},
 		Remediation: "EBS: set encrypted = true and kms_key_id. " +
 			"S3: configure aws_s3_bucket_server_side_encryption_configuration with KMS. " +
 			"RDS: set storage_encrypted = true and kms_key_id.",
 	},
+
 	{
 		ID:     "TF-008",
 		Domain: "Terraform",
@@ -1268,14 +1582,15 @@ var AllControls = []Control{
 		Compliance: ComplianceMapping{
 			CISDockerSection: "N/A",
 			NIST80053:        "AU-2, AU-12",
-			NIST800190:       "§4.5",
-			ISO27001:         "A.12.4.1",
+			NIST800190:       "§4.3.2, §4.5",
+			ISO27001:         "A.8.15, A.5.23, A.8.16",
 			SOC2:             "CC7.2",
 			DISACCI:          "CCI-000172",
 		},
 		Remediation: "Enable aws_cloudtrail with is_multi_region_trail = true. " +
 			"Enable S3 access logging via aws_s3_bucket_logging.",
 	},
+
 	{
 		ID:     "TF-009",
 		Domain: "Terraform",
@@ -1286,189 +1601,14 @@ var AllControls = []Control{
 		Type:     ControlDetective,
 		Compliance: ComplianceMapping{
 			CISDockerSection: "N/A",
-			NIST80053:        "RA-5, CM-6",
-			NIST800190:       "§4.2",
-			ISO27001:         "A.12.6.1, A.14.2.1",
+			NIST80053:        "RA-5, SA-11, CM-6",
+			NIST800190:       "§4.1.2",
+			ISO27001:         "A.8.8, A.8.26, A.8.25, A.5.23",
 			SOC2:             "CC7.1",
-			DISACCI:          "CCI-002617",
+			DISACCI:          "CCI-001067",
 		},
 		Remediation: "Install trivy or snyk. Run `trivy config .` or `snyk iac test .` " +
 			"on Terraform directories. Fix identified misconfigurations.",
-	},
-
-	// ── Domain: Image (continued) ──────────────────────────────────────────── //
-	{
-		ID:     "IMAGE-011",
-		Domain: "Docker",
-		Title:  "No Unnecessary Debug/Dev Tools Installed",
-		Description: "Debug tools (vim, gdb, strace, tcpdump, nmap) in production images " +
-			"provide attackers with ready-made reconnaissance and exploitation utilities.",
-		Severity: SeverityMedium,
-		Type:     ControlPreventive,
-		Compliance: ComplianceMapping{
-			CISDockerSection: "4.3",
-			NIST80053:        "CM-7, SI-7",
-			NIST800190:       "§4.2",
-			ISO27001:         "A.12.6.2",
-			SOC2:             "CC6.1",
-			DISACCI:          "CCI-000381",
-		},
-		Remediation: "Remove debug and development tools from production images. " +
-			"Use multi-stage builds to exclude build-time tools from the final image.",
-	},
-	{
-		ID:     "IMAGE-012",
-		Domain: "Docker",
-		Title:  "Package Manager Verification Enabled",
-		Description: "Disabling GPG verification (--no-check-gpg, --allow-unauthenticated, " +
-			"--trusted-host) allows installation of tampered or malicious packages.",
-		Severity: SeverityMedium,
-		Type:     ControlPreventive,
-		Compliance: ComplianceMapping{
-			CISDockerSection: "4.11",
-			NIST80053:        "SI-7",
-			NIST800190:       "§4.2",
-			ISO27001:         "A.14.2.4",
-			SOC2:             "CC6.1",
-			DISACCI:          "CCI-001749",
-		},
-		Remediation: "Never use --allow-unauthenticated, --no-check-gpg, or pip --trusted-host. " +
-			"Ensure package repositories use valid GPG signatures.",
-	},
-	{
-		ID:     "IMAGE-013",
-		Domain: "Docker",
-		Title:  "VOLUME Not Targeting Sensitive Paths",
-		Description: "VOLUME directives on /etc, /root, /var/run, or /tmp can bypass " +
-			"read-only root filesystem protections and expose sensitive host paths.",
-		Severity: SeverityMedium,
-		Type:     ControlPreventive,
-		Compliance: ComplianceMapping{
-			CISDockerSection: "5.13",
-			NIST80053:        "CM-7, AC-6",
-			NIST800190:       "§4.3",
-			ISO27001:         "A.9.4.1",
-			SOC2:             "CC6.1",
-			DISACCI:          "CCI-000366",
-		},
-		Remediation: "Avoid VOLUME for sensitive paths (/etc, /root, /var/run, /tmp). " +
-			"Use specific application data paths instead.",
-	},
-	{
-		ID:     "IMAGE-015",
-		Domain: "Docker",
-		Title:  "Minimal Base Image / Multi-Stage Build",
-		Description: "Non-minimal base images (with shell, package managers) increase " +
-			"attack surface. Multi-stage builds reduce final image to runtime-only dependencies.",
-		Severity: SeverityLow,
-		Type:     ControlPreventive,
-		Compliance: ComplianceMapping{
-			CISDockerSection: "4.3",
-			NIST80053:        "CM-7",
-			NIST800190:       "§4.2",
-			ISO27001:         "A.12.6.2",
-			SOC2:             "CC6.1",
-			DISACCI:          "CCI-000381",
-		},
-		Remediation: "Use distroless, scratch, or alpine base images for production. " +
-			"Employ multi-stage builds to exclude build tooling from the final stage.",
-	},
-	{
-		ID:     "IMAGE-016",
-		Domain: "Docker",
-		Title:  "COPY . . Recursive Copy Warning",
-		Description: "COPY . . copies the entire build context including .env, .git, " +
-			"credentials, and other sensitive files into the image layer.",
-		Severity: SeverityMedium,
-		Type:     ControlPreventive,
-		Compliance: ComplianceMapping{
-			CISDockerSection: "4.9",
-			NIST80053:        "CM-7",
-			NIST800190:       "§4.2",
-			ISO27001:         "A.9.4.1",
-			SOC2:             "CC6.1",
-			DISACCI:          "CCI-000366",
-		},
-		Remediation: "Use specific file paths in COPY instructions instead of COPY . . " +
-			"Maintain a .dockerignore to exclude sensitive files (.env, .git, *.key).",
-	},
-
-	// ── Domain: Runtime (continued) ────────────────────────────────────────── //
-	{
-		ID:     "RUNTIME-013",
-		Domain: "Kubernetes",
-		Title:  "AppArmor / SELinux Profile Configured",
-		Description: "Without AppArmor or SELinux profiles, containers lack mandatory " +
-			"access control enforcement, increasing container escape risk.",
-		Severity: SeverityMedium,
-		Type:     ControlPreventive,
-		Compliance: ComplianceMapping{
-			CISDockerSection: "5.1, 5.2",
-			NIST80053:        "AC-3, AC-6",
-			NIST800190:       "§4.4",
-			ISO27001:         "A.9.4.1",
-			SOC2:             "CC6.1",
-			DISACCI:          "CCI-002235",
-		},
-		Remediation: "Add container.apparmor.security.beta.kubernetes.io annotation " +
-			"or configure seLinuxOptions in pod/container securityContext.",
-	},
-	{
-		ID:     "RUNTIME-014",
-		Domain: "Kubernetes",
-		Title:  "Default Service Account Not Automounted",
-		Description: "Automounting the default service account token gives every pod " +
-			"a credential that may have excessive RBAC permissions.",
-		Severity: SeverityMedium,
-		Type:     ControlPreventive,
-		Compliance: ComplianceMapping{
-			CISDockerSection: "5.32",
-			NIST80053:        "AC-2, AC-6",
-			NIST800190:       "§4.3",
-			ISO27001:         "A.9.4.1",
-			SOC2:             "CC6.1, CC6.3",
-			DISACCI:          "CCI-000366",
-		},
-		Remediation: "Set automountServiceAccountToken: false in pod spec. " +
-			"Create dedicated service accounts with minimal RBAC for pods that need API access.",
-	},
-	{
-		ID:     "RUNTIME-015",
-		Domain: "Docker",
-		Title:  "Container ulimits Explicitly Set",
-		Description: "Without explicit ulimits, containers inherit host defaults for " +
-			"open files and processes, enabling fork bombs and file descriptor exhaustion.",
-		Severity: SeverityLow,
-		Type:     ControlPreventive,
-		Compliance: ComplianceMapping{
-			CISDockerSection: "5.28",
-			NIST80053:        "SC-5",
-			NIST800190:       "§4.3",
-			ISO27001:         "A.12.1.3",
-			SOC2:             "CC6.1",
-			DISACCI:          "CCI-000366",
-		},
-		Remediation: "Set ulimits in Docker Compose (ulimits: nofile: 65535, nproc: 4096). " +
-			"In Kubernetes, use LimitRange or PodSecurityPolicy for resource constraints.",
-	},
-	{
-		ID:     "RUNTIME-016",
-		Domain: "Docker",
-		Title:  "Restart Policy Capped",
-		Description: "restart: always without a retry cap can cause crash-loop resource " +
-			"exhaustion. Use on-failure with max_retries to prevent infinite restarts.",
-		Severity: SeverityLow,
-		Type:     ControlPreventive,
-		Compliance: ComplianceMapping{
-			CISDockerSection: "5.14",
-			NIST80053:        "SC-5",
-			NIST800190:       "§4.3",
-			ISO27001:         "A.12.1.3",
-			SOC2:             "CC6.1",
-			DISACCI:          "CCI-000366",
-		},
-		Remediation: "Use restart: on-failure:5 instead of restart: always. " +
-			"In Compose v3+, use deploy.restart_policy with max_attempts.",
 	},
 
 	// ── Domain: Kubernetes ─────────────────────────────────────────────────── //
@@ -1483,14 +1623,15 @@ var AllControls = []Control{
 		Compliance: ComplianceMapping{
 			CISDockerSection: "N/A",
 			NIST80053:        "AC-4, SC-7",
-			NIST800190:       "§4.3",
-			ISO27001:         "A.13.1.3",
-			SOC2:             "CC6.1",
+			NIST800190:       "§4.3.3",
+			ISO27001:         "A.8.22",
+			SOC2:             "CC6.1, CC6.3",
 			DISACCI:          "CCI-001090",
 		},
 		Remediation: "Deploy workloads to dedicated namespaces, not 'default'. " +
 			"Apply NetworkPolicies per namespace to enforce pod-to-pod segmentation.",
 	},
+
 	{
 		ID:     "K8S-002",
 		Domain: "Kubernetes",
@@ -1502,14 +1643,15 @@ var AllControls = []Control{
 		Compliance: ComplianceMapping{
 			CISDockerSection: "N/A",
 			NIST80053:        "CP-9, SC-5",
-			NIST800190:       "§4.3",
-			ISO27001:         "A.17.1.1",
+			NIST800190:       "§4.3.4",
+			ISO27001:         "A.5.29, A.5.30, A.8.14",
 			SOC2:             "A1.2",
-			DISACCI:          "CCI-002385",
+			DISACCI:          "N/A",
 		},
 		Remediation: "Add topologySpreadConstraints or podAntiAffinity rules to spread " +
 			"replicas across nodes/zones for high availability.",
 	},
+
 	{
 		ID:     "K8S-003",
 		Domain: "Kubernetes",
@@ -1520,92 +1662,105 @@ var AllControls = []Control{
 		Type:     ControlDetective,
 		Compliance: ComplianceMapping{
 			CISDockerSection: "N/A",
-			NIST80053:        "RA-5, CM-6",
-			NIST800190:       "§4.3",
-			ISO27001:         "A.12.6.1, A.14.2.1",
+			NIST80053:        "RA-5, SA-11, CM-6",
+			NIST800190:       "§4.1.2",
+			ISO27001:         "A.8.8, A.8.26, A.8.25",
 			SOC2:             "CC7.1",
-			DISACCI:          "CCI-002617",
+			DISACCI:          "CCI-001067",
 		},
 		Remediation: "Install trivy or snyk. Run `trivy config .` or `snyk iac test .` " +
 			"on manifest directories. Fix identified misconfigurations.",
 	},
 
-	// ── Domain: Daemon (continued) ─────────────────────────────────────────── //
+		// ── Domain: Registry ───────────────────────────────────────────────────── //
 	{
-		ID:     "DAEMON-006",
+		ID:     "REGISTRY-001",
 		Domain: "Docker",
-		Title:  "Inter-Container Communication Disabled",
-		Description: "Default Docker networking allows all containers to communicate freely. " +
-			"Disabling ICC (--icc=false) forces explicit --link or network declarations.",
+		Title:  "No Insecure Registries Configured",
+		Description: "Listing a registry in insecure-registries (or passing --insecure-registry to " +
+			"dockerd) disables TLS certificate verification for that registry. Image pulls can then " +
+			"be silently MITM'd: an attacker on the network path serves a malicious image layer and " +
+			"the daemon accepts it without verification. Also applies to registries referenced over " +
+			"plain http:// URLs.",
+		Severity: SeverityCritical,
+		Type:     ControlPreventive,
+		Compliance: ComplianceMapping{
+			CISDockerSection: "2.5",
+			NIST80053:        "SC-8, SC-13, IA-3, SR-3",
+			NIST800190:       "§3.2.1, §4.2.1",
+			ISO27001:         "A.8.20, A.5.14, A.8.23",
+			SOC2:             "CC6.6, CC6.7",
+			DISACCI:          "CCI-002418, CCI-002421",
+		},
+		Remediation: "Remove all entries from the insecure-registries array in /etc/docker/daemon.json. " +
+			"Do not pass --insecure-registry to dockerd. Configure registries to serve TLS with a " +
+			"trusted certificate. For internal CAs, install the CA bundle on the host rather than " +
+			"disabling verification.",
+	},
+	{
+		ID:     "REGISTRY-002",
+		Domain: "Docker",
+		Title:  "No Image References to Unauthenticated Registries",
+		Description: "FROM directives, compose image fields, and k8s pod image references pointing " +
+			"at http:// registries or known public anonymous mirrors expose image pulls to MITM and " +
+			"allow any network-adjacent attacker to substitute images. This control pairs with " +
+			"REGISTRY-001, which enforces the daemon-side posture.",
+		Severity: SeverityHigh,
+		Type:     ControlPreventive,
+		Compliance: ComplianceMapping{
+			CISDockerSection: "4.5",
+			NIST80053:        "IA-3, SC-8, SI-7, SR-3, SR-4",
+			NIST800190:       "§3.2.3, §4.2.3",
+			ISO27001:         "A.8.3, A.5.14, A.8.5",
+			SOC2:             "CC6.1, CC6.6, CC6.8",
+			DISACCI:          "CCI-000778, CCI-002418",
+		},
+		Remediation: "Replace http:// registry references with https://. Pull from registries that " +
+			"require authentication (ECR, GAR, ACR, Harbor, private Docker Hub repos).",
+	},
+	{
+		ID:     "REGISTRY-003",
+		Domain: "Terraform",
+		Title:  "Cloud Registry Enforces Authentication and IAM Least-Privilege",
+		Description: "ECR, Google Artifact Registry, and Azure Container Registry can be configured " +
+			"to allow anonymous pulls or permissive repository policies (Principal: \"*\", " +
+			"allUsers / allAuthenticatedUsers, anonymous_pull_enabled = true). Any such configuration " +
+			"effectively exposes proprietary images and makes stale vulnerable images reachable from " +
+			"the public Internet.",
+		Severity: SeverityCritical,
+		Type:     ControlPreventive,
+		Compliance: ComplianceMapping{
+			CISDockerSection: "N/A",
+			NIST80053:        "AC-3, AC-6, IA-2, SR-3",
+			NIST800190:       "§3.2.3, §4.2.3",
+			ISO27001:         "A.5.15, A.8.3, A.5.23",
+			SOC2:             "CC6.1, CC6.3",
+			DISACCI:          "CCI-000213, CCI-002235",
+		},
+		Remediation: "ECR: attach an aws_ecr_repository_policy with explicit Principal ARNs — never \"*\". " +
+			"GAR: use google_artifact_registry_repository_iam_* with specific members, not allUsers " +
+			"or allAuthenticatedUsers. ACR: set anonymous_pull_enabled = false.",
+	},
+	{
+		ID:     "REGISTRY-004",
+		Domain: "Terraform",
+		Title:  "Cloud Registry Has Lifecycle / Retention Policy",
+		Description: "Registries without a lifecycle or retention policy accumulate stale, vulnerable " +
+			"images indefinitely. Each stale tag is a candidate for accidental deployment — a developer " +
+			"pulls \"latest\" or an older pinned tag and resurrects a known-exploitable image. A lifecycle " +
+			"policy that ages out untagged images and caps the number of retained tags bounds this risk.",
 		Severity: SeverityMedium,
 		Type:     ControlPreventive,
 		Compliance: ComplianceMapping{
-			CISDockerSection: "2.3",
-			NIST80053:        "SC-7",
-			NIST800190:       "§4.5",
-			ISO27001:         "A.13.1.3",
-			SOC2:             "CC6.6",
-			DISACCI:          "CCI-001090",
+			CISDockerSection: "N/A",
+			NIST80053:        "SI-2, RA-5, CM-2, SR-3, SR-12",
+			NIST800190:       "§3.2.2, §4.2.2",
+			ISO27001:         "A.8.10, A.8.8, A.8.25, A.5.23",
+			SOC2:             "CC7.1, A1.2",
+			DISACCI:          "CCI-002617",
 		},
-		Remediation: "Set \"icc\": false in daemon.json. " +
-			"Use user-defined bridge networks for services that need to communicate.",
-	},
-	{
-		ID:     "DAEMON-007",
-		Domain: "Docker",
-		Title:  "Userland Proxy Disabled",
-		Description: "The Docker userland proxy (docker-proxy) is a user-space TCP forwarder " +
-			"that bypasses iptables connection tracking and has higher overhead.",
-		Severity: SeverityLow,
-		Type:     ControlPreventive,
-		Compliance: ComplianceMapping{
-			CISDockerSection: "2.11",
-			NIST80053:        "SC-5",
-			NIST800190:       "§4.5",
-			ISO27001:         "A.13.1.1",
-			SOC2:             "CC6.1",
-			DISACCI:          "CCI-000366",
-		},
-		Remediation: "Set \"userland-proxy\": false in daemon.json to use iptables hairpin NAT.",
-	},
-	{
-		ID:     "DAEMON-008",
-		Domain: "Docker",
-		Title:  "Live Restore Enabled",
-		Description: "Without live-restore, all containers stop when the Docker daemon restarts " +
-			"for an upgrade, causing unnecessary downtime.",
-		Severity: SeverityLow,
-		Type:     ControlPreventive,
-		Compliance: ComplianceMapping{
-			CISDockerSection: "2.15",
-			NIST80053:        "CP-10",
-			NIST800190:       "§4.3",
-			ISO27001:         "A.17.1.1",
-			SOC2:             "A1.2",
-			DISACCI:          "CCI-002385",
-		},
-		Remediation: "Set \"live-restore\": true in daemon.json to keep containers running " +
-			"during daemon upgrades.",
-	},
-
-	// ── Domain: Host (continued) ───────────────────────────────────────────── //
-	{
-		ID:     "HOST-006",
-		Domain: "Docker",
-		Title:  "Auditd Rules for Docker Paths",
-		Description: "Without auditd watches on Docker directories and binaries, " +
-			"filesystem-level tampering goes undetected.",
-		Severity: SeverityMedium,
-		Type:     ControlDetective,
-		Compliance: ComplianceMapping{
-			CISDockerSection: "1.8-1.13",
-			NIST80053:        "AU-2, AU-12",
-			NIST800190:       "§4.5",
-			ISO27001:         "A.12.4.1",
-			SOC2:             "CC7.2",
-			DISACCI:          "CCI-000172",
-		},
-		Remediation: "Add auditd -w rules for /etc/docker, /var/lib/docker, " +
-			"/usr/bin/dockerd, /var/run/docker.sock, and Docker systemd unit files.",
+		Remediation: "ECR: attach an aws_ecr_lifecycle_policy that expires untagged images and caps " +
+			"retained tagged versions. GAR: configure cleanup_policies on the repository with KEEP " +
+			"and DELETE rules by age and tag count. ACR: enable retention_policy.enabled = true.",
 	},
 }

@@ -667,6 +667,7 @@ func TestCheckComposeContentTrust_Disabled(t *testing.T) {
 	f := findFinding(findings, "DAEMON-004")
 	if f == nil {
 		t.Fatal("expected finding for DAEMON-004")
+		return
 	}
 	if f.Status != types.StatusWarn {
 		t.Errorf("expected WARN for DOCKER_CONTENT_TRUST=0, got %s", f.Status)
@@ -1881,6 +1882,7 @@ func TestCheckLines_COPY_DotDot(t *testing.T) {
 	f := findFinding(findings, "IMAGE-016")
 	if f == nil {
 		t.Fatal("expected IMAGE-016 finding for COPY . .")
+		return
 	}
 	if f.Status != types.StatusWarn {
 		t.Errorf("expected WARN for COPY . ., got %s", f.Status)
@@ -1914,6 +1916,7 @@ func TestCheckLines_MultiStage(t *testing.T) {
 	f := findFinding(findings, "IMAGE-015")
 	if f == nil {
 		t.Fatal("expected IMAGE-015 finding for multi-stage build")
+		return
 	}
 	if f.Status != types.StatusPass {
 		t.Errorf("expected PASS for multi-stage build, got %s", f.Status)
@@ -1927,6 +1930,7 @@ func TestCheckLines_SingleStage(t *testing.T) {
 	f := findFinding(findings, "IMAGE-015")
 	if f == nil {
 		t.Fatal("expected IMAGE-015 finding for single-stage build")
+		return
 	}
 	if f.Status != types.StatusWarn {
 		t.Errorf("expected WARN for single-stage build, got %s", f.Status)
