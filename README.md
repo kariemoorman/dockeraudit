@@ -37,8 +37,8 @@
 
 ## Features
 
-**80 Security Controls**: 
-  - Includes security controls across 11 domains with compliance mappings to CIS, NIST 800-53, NIST 800-190, ISO 27001, SOC 2, and DISA CCI.
+**80+ Security Controls**: 
+  - Includes security controls across 12 domains with compliance mappings to CIS, NIST 800-53, NIST 800-190, ISO 27001, SOC 2, and DISA CCI.
 
 **Docker Scanning**: 
   - Audits Images, Dockerfiles, & Docker Compose configurations for misconfigurations, secrets, and other security vulnerabilities.
@@ -738,7 +738,7 @@ dockeraudit completion powershell >> $PROFILE
 
 ## Security Controls
 
-dockeraudit evaluates **80 controls** across **11 security domains**:
+dockeraudit evaluates **80+ controls** across **12 security domains**:
 
 
 | Domain | Controls | What It Covers |
@@ -747,6 +747,7 @@ dockeraudit evaluates **80 controls** across **11 security domains**:
 | **Daemon** | 8 | Docker socket, TCP/port 2375 exposure, userns-remap, content trust, log rotation |
 | **Image** | 16 | Digest pinning, secrets in layers, SUID files, non-root USER, EOL images, debug tools, package verification bypass, recursive COPY, multi-stage builds |
 | **Runtime** | 16 | Privileged mode, capabilities, read-only rootfs, host namespaces, resource limits, health probes, seccomp, AppArmor/SELinux, automountSA, ulimits, restart policies |
+| **Registry** | 4 | Insecure-registries in daemon config, unauthenticated/http registry refs in Dockerfiles/Compose/k8s, ECR/GAR/ACR IAM least-privilege, lifecycle/retention policies |
 | **Network** | 2 | Default-deny NetworkPolicy, cloud metadata endpoint blocked |
 | **Secrets** | 3 | External secrets manager, RBAC-scoped secret access, AI/API key detection |
 | **Supply Chain** | 3 | Image signing, SBOM attestation, immutable registry tags |

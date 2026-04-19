@@ -104,6 +104,91 @@ var aiKeyPatterns = []string{
 	"azure_openai_api_key",
 }
 
+// ── REGISTRY-002: unauthenticated registry detection ─────────────────────── //
+
+// unauthenticatedRegistryHosts are hosts that historically served images without
+// authentication. Hitting one of these means images can be substituted by any
+// network-adjacent attacker. Matched against the registry host portion of an
+// image reference.
+var unauthenticatedRegistryHosts = []string{
+	// Known public anonymous / test registries.
+	"registry-1.docker.io", // anonymous pulls for public images
+	"docker.io",            // same
+	"index.docker.io",      // legacy alias
+	// NOTE: docker.io is listed but only WARNED, not FAILED — anonymous pulls
+	// from public Hub are extremely common and not intrinsically unsafe. The
+	// FAIL cases below are actually dangerous defaults.
+}
+
+// classifyRegistryRef classifies an image reference by its registry posture.
+// Returns (posture, host, detail).
+//
+//	"insecure" — explicit http:// or known-bad scheme — FAIL.
+//	"anonymous" — well-known anonymous registries — WARN.
+//	"private"  — private cloud registries (ECR/GAR/ACR) or non-default host — PASS.
+//	"unknown"  — default (docker.io with private repo, or no determinable host).
+func classifyRegistryRef(ref string) (posture, host, detail string) {
+	if ref == "" {
+		return "unknown", "", ""
+	}
+	low := strings.ToLower(ref)
+
+	// Explicit insecure scheme in the reference itself.
+	if strings.HasPrefix(low, "http://") {
+		return "insecure", "", "reference uses plaintext http:// scheme"
+	}
+
+	// Strip any scheme prefix for host parsing.
+	trimmed := strings.TrimPrefix(low, "https://")
+
+	// No slash at all → bare "nginx:latest" form, implies Docker Hub.
+	slashIdx := strings.Index(trimmed, "/")
+	if slashIdx < 0 {
+		return "anonymous", "docker.io", "image pulls from Docker Hub without explicit registry"
+	}
+
+	maybeHost := trimmed[:slashIdx]
+	// The first slash-separated component is the host IF it contains a '.' or ':'
+	// (e.g. "ghcr.io/org/img", "myreg.local:5000/img"). Otherwise it's a Docker
+	// Hub user path like "library/nginx".
+	if !strings.Contains(maybeHost, ".") && !strings.Contains(maybeHost, ":") {
+		return "anonymous", "docker.io", "image pulls from Docker Hub without explicit registry"
+	}
+
+	host = maybeHost
+
+	// Private cloud registries — known authenticated by default.
+	switch {
+	case strings.HasSuffix(host, ".dkr.ecr.amazonaws.com") ||
+		strings.Contains(host, ".dkr.ecr."):
+		return "private", host, "Amazon ECR (private)"
+	case strings.HasSuffix(host, "-docker.pkg.dev") ||
+		strings.HasSuffix(host, ".pkg.dev") ||
+		host == "gcr.io" ||
+		strings.HasSuffix(host, ".gcr.io"):
+		return "private", host, "Google Artifact Registry / GCR"
+	case strings.HasSuffix(host, ".azurecr.io"):
+		return "private", host, "Azure Container Registry"
+	case host == "ghcr.io":
+		return "private", host, "GitHub Container Registry (supports auth)"
+	case strings.Contains(host, "registry.gitlab"):
+		return "private", host, "GitLab Container Registry"
+	case strings.Contains(host, "harbor"):
+		return "private", host, "Harbor (likely authenticated)"
+	}
+
+	for _, bad := range unauthenticatedRegistryHosts {
+		if host == bad {
+			return "anonymous", host, "well-known anonymous registry"
+		}
+	}
+
+	// Custom registry host — treat as private. Users on plaintext registries
+	// will be caught by REGISTRY-001 (daemon insecure-registries) or the
+	// http:// prefix check above.
+	return "private", host, "custom registry host"
+}
+
 // ── EOL image detection ───────────────────────────────────────────────────── //
 
 // EOLEntry defines an end-of-life image that should trigger IMAGE-008.

@@ -507,6 +507,7 @@ func (s *K8sScanner) checkObject(obj kubeObject, path string) []types.Finding {
 		findings = append(findings, checkK8sResources(c, ct)...)
 		findings = append(findings, checkK8sSecrets(c, ct)...)
 		findings = append(findings, checkK8sImageDigest(c, ct)...)
+		findings = append(findings, checkK8sRegistryAuth(c, ct)...)
 		findings = append(findings, checkK8sImagePullPolicy(c, ct)...)
 		findings = append(findings, checkK8sEOLImage(c, ct)...)
 		findings = append(findings, checkImageMinimality(c.Image, ct)...)
@@ -750,6 +751,28 @@ func checkK8sImageDigest(c container, target string) []types.Finding {
 			ctrl.Remediation)}
 	}
 	return []types.Finding{pass(ctrl, target, fmt.Sprintf("Image digest-pinned: %s", shortImage(c.Image)))}
+}
+
+// checkK8sRegistryAuth flags pod containers whose image field references an
+// insecure or anonymous registry (REGISTRY-002).
+func checkK8sRegistryAuth(c container, target string) []types.Finding {
+	ctrl := controlByID("REGISTRY-002")
+	if c.Image == "" {
+		return []types.Finding{skipped(ctrl, target, "No image field to classify")}
+	}
+	posture, host, detail := classifyRegistryRef(c.Image)
+	switch posture {
+	case "insecure":
+		return []types.Finding{fail(ctrl, target,
+			fmt.Sprintf("Image uses insecure registry reference: %s", c.Image),
+			detail, ctrl.Remediation)}
+	case "anonymous":
+		return []types.Finding{warn(ctrl, target,
+			fmt.Sprintf("Image pulls from %s — %s", host, detail),
+			fmt.Sprintf("image: %s", c.Image))}
+	}
+	return []types.Finding{pass(ctrl, target,
+		fmt.Sprintf("Image references an authenticated registry: %s", host))}
 }
 
 func checkK8sHostNamespaces(spec podSpec, target string) []types.Finding {

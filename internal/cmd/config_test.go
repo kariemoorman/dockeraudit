@@ -33,6 +33,7 @@ verbose: true
 	}
 	if cfg == nil {
 		t.Fatal("LoadConfig returned nil config")
+		return
 	}
 
 	if cfg.Format != "json" {
@@ -83,6 +84,7 @@ fail-on: critical
 	}
 	if cfg == nil {
 		t.Fatal("LoadConfig returned nil — should have found .dockeraudit.yaml")
+		return
 	}
 	if cfg.Format != "sarif" {
 		t.Errorf("Format = %q, want %q", cfg.Format, "sarif")
@@ -117,6 +119,7 @@ func TestLoadConfig_YMLExtension(t *testing.T) {
 	}
 	if cfg == nil {
 		t.Fatal("LoadConfig returned nil — should have found .dockeraudit.yml")
+		return
 	}
 	if cfg.Format != "markdown" {
 		t.Errorf("Format = %q, want %q", cfg.Format, "markdown")
@@ -179,6 +182,7 @@ func TestLoadConfig_EmptyFile(t *testing.T) {
 	}
 	if cfg == nil {
 		t.Fatal("LoadConfig returned nil for empty file")
+		return
 	}
 	// All fields should be zero values.
 	if cfg.Format != "" {

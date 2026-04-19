@@ -342,6 +342,10 @@ func checkDaemonJSON() []types.Finding {
 				"/etc/docker/daemon.json not found"))
 			// DAEMON-004: Check env var fallback when no daemon.json
 			findings = append(findings, checkContentTrustEnv()...)
+			// REGISTRY-001: No daemon.json means no insecure-registries entries; PASS.
+			ctrlReg1 := controlByID("REGISTRY-001")
+			findings = append(findings, pass(ctrlReg1, "docker-daemon",
+				"No daemon.json — no insecure-registries configured"))
 			return findings
 		}
 		return []types.Finding{errFinding(controlByID("DAEMON-006"), "docker-daemon",
@@ -464,7 +468,39 @@ func checkDaemonJSON() []types.Finding {
 			"log-opts key not present in daemon.json"))
 	}
 
+	// REGISTRY-001: insecure-registries array
+	ctrlReg1 := controlByID("REGISTRY-001")
+	if ir, ok := daemon["insecure-registries"]; ok {
+		if irSlice, ok := ir.([]interface{}); ok && len(irSlice) > 0 {
+			var entries []string
+			for _, v := range irSlice {
+				if s, ok := v.(string); ok {
+					entries = append(entries, s)
+				}
+			}
+			findings = append(findings, fail(ctrlReg1, "docker-daemon",
+				fmt.Sprintf("insecure-registries configured (%d entr%s) — TLS verification disabled for these registries",
+					len(entries), pluralY(len(entries))),
+				fmt.Sprintf("daemon.json: insecure-registries = %v", entries),
+				ctrlReg1.Remediation))
+		} else {
+			findings = append(findings, pass(ctrlReg1, "docker-daemon",
+				"insecure-registries key present but empty"))
+		}
+	} else {
+		findings = append(findings, pass(ctrlReg1, "docker-daemon",
+			"No insecure-registries configured"))
+	}
+
 	return findings
+}
+
+// pluralY returns "y" for n==1, "ies" otherwise. Used for "entry/entries" formatting.
+func pluralY(n int) string {
+	if n == 1 {
+		return "y"
+	}
+	return "ies"
 }
 
 // checkKernelVersion checks for known container-escape kernel CVEs (HOST-002).

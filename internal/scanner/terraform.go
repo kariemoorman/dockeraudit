@@ -836,6 +836,118 @@ func (s *TerraformScanner) buildChecks() []tfCheck {
 				return findings
 			},
 		},
+		{
+			name: "Cloud Registry Authentication (ECR/GAR/ACR)",
+			run: func(path, content string) []types.Finding {
+				ctrl := controlByID("REGISTRY-003")
+				hasECR := strings.Contains(content, "aws_ecr_repository") ||
+					strings.Contains(content, "aws_ecr_repository_policy") ||
+					strings.Contains(content, "aws_ecr_registry_policy")
+				hasGAR := strings.Contains(content, "google_artifact_registry_repository")
+				hasACR := strings.Contains(content, "azurerm_container_registry")
+				if !hasECR && !hasGAR && !hasACR {
+					return []types.Finding{skipped(ctrl, path,
+						"No ECR / Artifact Registry / ACR resources in file")}
+				}
+
+				var findings []types.Finding
+
+				// ECR: flag repository / registry policies granting Principal "*".
+				if hasECR {
+					// Matches: Principal = "*" OR principals { type = "*" } OR {"AWS": "*"}.
+					wildcardPrincipal := `"?Principal"?\s*[=:]\s*"\*"`
+					awsWildcard := `"AWS"\s*:\s*"\*"`
+					if hasPattern(content, wildcardPrincipal) || hasPattern(content, awsWildcard) {
+						line := findPatternLine(content, wildcardPrincipal)
+						if line == 0 {
+							line = findPatternLine(content, awsWildcard)
+						}
+						findings = append(findings, withSource(fail(ctrl, path,
+							"ECR repository/registry policy grants access to Principal \"*\" (public)",
+							"aws_ecr_repository_policy or aws_ecr_registry_policy with wildcard Principal",
+							ctrl.Remediation), path, line))
+					}
+				}
+
+				// GAR: flag IAM bindings that use allUsers or allAuthenticatedUsers.
+				if hasGAR {
+					if strings.Contains(content, "allUsers") || strings.Contains(content, "allAuthenticatedUsers") {
+						line := findStringLine(content, "allUsers")
+						if line == 0 {
+							line = findStringLine(content, "allAuthenticatedUsers")
+						}
+						findings = append(findings, withSource(fail(ctrl, path,
+							"Artifact Registry IAM grants access to allUsers / allAuthenticatedUsers (public)",
+							"google_artifact_registry_repository_iam_* with public member",
+							ctrl.Remediation), path, line))
+					}
+				}
+
+				// ACR: flag anonymous_pull_enabled = true.
+				if hasACR {
+					if hasPattern(content, `anonymous_pull_enabled\s*=\s*true`) {
+						line := findPatternLine(content, `anonymous_pull_enabled\s*=\s*true`)
+						findings = append(findings, withSource(fail(ctrl, path,
+							"ACR has anonymous_pull_enabled = true — images are publicly pullable",
+							"azurerm_container_registry with anonymous_pull_enabled = true",
+							ctrl.Remediation), path, line))
+					}
+				}
+
+				if len(findings) == 0 {
+					return []types.Finding{pass(ctrl, path,
+						"No public-access registry policies detected")}
+				}
+				return findings
+			},
+		},
+		{
+			name: "Cloud Registry Lifecycle / Retention (ECR/GAR/ACR)",
+			run: func(path, content string) []types.Finding {
+				ctrl := controlByID("REGISTRY-004")
+				hasECR := strings.Contains(content, "aws_ecr_repository")
+				hasGAR := strings.Contains(content, "google_artifact_registry_repository")
+				hasACR := strings.Contains(content, "azurerm_container_registry")
+				if !hasECR && !hasGAR && !hasACR {
+					return []types.Finding{skipped(ctrl, path,
+						"No ECR / Artifact Registry / ACR resources in file")}
+				}
+
+				var findings []types.Finding
+
+				// ECR: require an aws_ecr_lifecycle_policy somewhere in the file.
+				if hasECR && !strings.Contains(content, "aws_ecr_lifecycle_policy") {
+					line := findStringLine(content, "aws_ecr_repository")
+					findings = append(findings, withSource(warn(ctrl, path,
+						"ECR repository has no aws_ecr_lifecycle_policy — stale images will accumulate",
+						"aws_ecr_repository present without aws_ecr_lifecycle_policy"), path, line))
+				}
+
+				// GAR: require a cleanup_policies block on the repository.
+				if hasGAR && !strings.Contains(content, "cleanup_policies") {
+					line := findStringLine(content, "google_artifact_registry_repository")
+					findings = append(findings, withSource(warn(ctrl, path,
+						"Artifact Registry repository has no cleanup_policies block — stale images will accumulate",
+						"google_artifact_registry_repository present without cleanup_policies"), path, line))
+				}
+
+				// ACR: require retention_policy.enabled = true.
+				if hasACR {
+					if !hasPattern(content, `retention_policy\s*\{[^}]*enabled\s*=\s*true`) {
+						line := findStringLine(content, "azurerm_container_registry")
+						findings = append(findings, withSource(warn(ctrl, path,
+							"ACR has no retention_policy { enabled = true } — stale images will accumulate",
+							"azurerm_container_registry without retention_policy.enabled = true"), path, line))
+					}
+				}
+
+				if len(findings) == 0 {
+					return []types.Finding{pass(ctrl, path,
+						"Registry lifecycle / retention policy present")}
+				}
+				return findings
+			},
+		},
 	}
 }
 

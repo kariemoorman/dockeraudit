@@ -211,7 +211,7 @@ func TestCheckK8sImagePullPolicy_IfNotPresent(t *testing.T) {
 	assertPass(t, findings, "IMAGE-001")
 }
 
-// ── Annotation secret detection with SecretScanner ───────────────────────────
+// ── Annotation secret detection with SecretScanner ─────────────────────────── //
 
 func TestCheckAnnotationsForSecrets_PostgresURL(t *testing.T) {
 	meta := kubeObjectMeta{
@@ -291,7 +291,7 @@ func TestCheckAnnotationsForSecrets_GitHubTokenViaRegex(t *testing.T) {
 	}
 }
 
-// ── Shared credentialKeywords usage in K8s ────────────────────────────────────
+// ── Shared credentialKeywords usage in K8s ──────────────────────────────────── //
 
 func TestCheckK8sSecrets_UsesSharedCredentialKeywords(t *testing.T) {
 	// "connection_string" is in shared credentialKeywords but was NOT in old local credPatterns
@@ -453,7 +453,7 @@ func TestCheckK8sEOLImage_GolangCurrent(t *testing.T) {
 	assertPass(t, findings, "IMAGE-008")
 }
 
-// ── CronJob nesting (TASK-8.1) ────────────────────────────────────────────────
+// ── CronJob nesting (TASK-8.1) ──────────────────────────────────────────────── //
 
 func TestK8sScanner_CronJob_DetectsPrivileged(t *testing.T) {
 	dir := t.TempDir()
@@ -550,7 +550,7 @@ func assertWarn(t *testing.T, findings []types.Finding, controlID string) {
 	}
 }
 
-// ── checkServiceExposure ─────────────────────────────────────────────────────
+// ── checkServiceExposure ───────────────────────────────────────────────────── //
 
 func TestCheckServiceExposure_ClusterIP(t *testing.T) {
 	svc := serviceSpec{
@@ -574,7 +574,7 @@ func TestCheckServiceExposure_NodePort_DBPort(t *testing.T) {
 	assertFail(t, findings, "DB-K8S-003")
 }
 
-// ── checkDBAuthDisabledEnv ───────────────────────────────────────────────────
+// ── checkDBAuthDisabledEnv ─────────────────────────────────────────────────── //
 
 func TestCheckDBAuthDisabledEnv_TrustAuth(t *testing.T) {
 	c := container{
@@ -611,7 +611,7 @@ func TestCheckDBAuthDisabledEnv_Clean(t *testing.T) {
 	assertPass(t, findings, "DB-K8S-001")
 }
 
-// ── checkDBMissingAuthConfig ─────────────────────────────────────────────────
+// ── checkDBMissingAuthConfig ───────────────────────────────────────────────── //
 
 func TestCheckDBMissingAuthConfig_Missing(t *testing.T) {
 	c := container{
@@ -645,7 +645,7 @@ func TestCheckDBMissingAuthConfig_NotDBImage(t *testing.T) {
 	assertSkipped(t, findings, "DB-K8S-002")
 }
 
-// ── checkNeo4jApocSSRF ───────────────────────────────────────────────────────
+// ── checkNeo4jApocSSRF ─────────────────────────────────────────────────────── //
 
 func TestCheckNeo4jApocSSRF_Unrestricted(t *testing.T) {
 	c := container{
@@ -683,7 +683,7 @@ func TestCheckNeo4jApocSSRF_NotNeo4j(t *testing.T) {
 	assertSkipped(t, findings, "DB-K8S-007")
 }
 
-// ── checkDBEmptyDirData ──────────────────────────────────────────────────────
+// ── checkDBEmptyDirData ────────────────────────────────────────────────────── //
 
 func TestCheckDBEmptyDirData_DataOnEmptyDir(t *testing.T) {
 	spec := podSpec{
@@ -723,7 +723,7 @@ func TestCheckDBEmptyDirData_DataOnPVC(t *testing.T) {
 	assertSkipped(t, findings, "DB-K8S-004")
 }
 
-// ── checkDBFsGroup ───────────────────────────────────────────────────────────
+// ── checkDBFsGroup ─────────────────────────────────────────────────────────── //
 
 func TestCheckDBFsGroup_Missing(t *testing.T) {
 	spec := podSpec{
@@ -923,10 +923,10 @@ FROM nginx:1.25-alpine`
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Phase 2+3: New K8s control tests
+// K8s control tests
 // ══════════════════════════════════════════════════════════════════════════════
 
-// ── NETWORK-001: NetworkPolicy ──────────────────────────────────────────────
+// ── NETWORK-001: NetworkPolicy ────────────────────────────────────────────── //
 
 func TestNetworkPolicy_DefaultDenyIngress(t *testing.T) {
 	manifest := writeTestManifest(t, `
@@ -998,13 +998,14 @@ spec:
 	f := findFinding(result.Findings, "NETWORK-001")
 	if f == nil {
 		t.Fatal("expected NETWORK-001 finding from aggregation")
+		return
 	}
 	if f.Status != types.StatusWarn {
 		t.Errorf("expected WARN for missing NetworkPolicy, got %s", f.Status)
 	}
 }
 
-// ── NETWORK-002: Cloud Metadata Endpoint Blocked ────────────────────────────
+// ── NETWORK-002: Cloud Metadata Endpoint Blocked ──────────────────────────── //
 
 func TestNetworkPolicy_MetadataBlock_Pass(t *testing.T) {
 	manifest := writeTestManifest(t, `
@@ -1071,13 +1072,14 @@ spec:
 	f := findFinding(result.Findings, "NETWORK-002")
 	if f == nil {
 		t.Fatal("expected NETWORK-002 finding from aggregation")
+		return
 	}
 	if f.Status != types.StatusWarn {
 		t.Errorf("expected WARN for missing metadata block, got %s", f.Status)
 	}
 }
 
-// ── SECRETS-001: External Secrets ───────────────────────────────────────────
+// ── SECRETS-001: External Secrets ─────────────────────────────────────────── //
 
 func TestK8s_ExternalSecret_Pass(t *testing.T) {
 	manifest := writeTestManifest(t, `
@@ -1154,7 +1156,7 @@ spec:
 	assertPass(t, result.Findings, "SECRETS-001")
 }
 
-// ── SECRETS-002: RBAC Secret Access ─────────────────────────────────────────
+// ── SECRETS-002: RBAC Secret Access ───────────────────────────────────────── //
 
 func TestK8s_ClusterRole_WildcardSecrets_Fail(t *testing.T) {
 	manifest := writeTestManifest(t, `
@@ -1212,7 +1214,7 @@ rules:
 	assertFail(t, result.Findings, "SECRETS-002")
 }
 
-// ── SUPPLY-001: Kyverno Image Verification ──────────────────────────────────
+// ── SUPPLY-001: Kyverno Image Verification ────────────────────────────────── //
 
 func TestK8s_KyvernoVerifyImages_Pass(t *testing.T) {
 	manifest := writeTestManifest(t, `
@@ -1243,7 +1245,7 @@ spec:
 	assertPass(t, result.Findings, "SUPPLY-001")
 }
 
-// ── MONITOR-001: Runtime Detection Agent ────────────────────────────────────
+// ── MONITOR-001: Runtime Detection Agent ──────────────────────────────────── //
 
 func TestK8s_FalcoDaemonSet_Pass(t *testing.T) {
 	manifest := writeTestManifest(t, `
@@ -1280,7 +1282,7 @@ spec:
 	assertPass(t, result.Findings, "MONITOR-001")
 }
 
-// ── MONITOR-002: Kubernetes API Server Audit Logging ─────────────────────────
+// ── MONITOR-002: Kubernetes API Server Audit Logging ───────────────────────── //
 
 func TestK8s_AuditPolicy_Pass(t *testing.T) {
 	manifest := writeTestManifest(t, `
@@ -1377,7 +1379,7 @@ spec:
 	assertWarn(t, result.Findings, "MONITOR-002")
 }
 
-// ── Defense-in-depth tests ───────────────────────────────────────────────────
+// ── Defense-in-depth tests ─────────────────────────────────────────────────── //
 
 func TestK8s_DockerSockHostPath_DualFinding(t *testing.T) {
 	manifest := writeTestManifest(t, `
@@ -1422,7 +1424,7 @@ spec:
 	assertFail(t, result.Findings, "DAEMON-001")
 }
 
-// ── IntOrString tolerance (named ports) ──────────────────────────────────────
+// ── IntOrString tolerance (named ports) ────────────────────────────────────── //
 
 // TestK8sScanner_NamedTargetPort_NoParseError ensures that Services using a
 // named port for targetPort (IntOrString in the Kubernetes API) do not produce
@@ -1507,7 +1509,7 @@ spec:
 	}
 }
 
-// ── Parse error surfacing ────────────────────────────────────────────────────
+// ── Parse error surfacing ──────────────────────────────────────────────────── //
 
 // TestK8sScanner_ParseError_EmitsErrorFinding verifies that YAML parse errors
 // (commonly caused by un-rendered Helm templates containing `{{ .Values.foo }}`)
@@ -1539,7 +1541,7 @@ spec:
 	}
 }
 
-// ── Test helper ──────────────────────────────────────────────────────────────
+// ── Test helper ────────────────────────────────────────────────────────────── //
 
 func writeTestManifest(t *testing.T, content string) string {
 	t.Helper()
