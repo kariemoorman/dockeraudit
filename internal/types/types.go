@@ -91,6 +91,7 @@ type Control struct {
 	ID          string            `json:"id"`
 	Domain      string            `json:"domain"`
 	Title       string            `json:"title"`
+	Summary     string            `json:"summary"`
 	Description string            `json:"description"`
 	Severity    Severity          `json:"severity"`
 	Type        ControlType       `json:"type"`

@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/kariemoorman/dockeraudit/internal/types"
 )
@@ -18,9 +19,13 @@ const (
 	colSeverity = 8  // "SEVERITY"=8; values: CRITICAL=8, HIGH=4, MEDIUM=6, LOW=3
 	colID       = 12 // "CONTROL ID"=10; longest IDs ~11 chars (e.g. "RUNTIME-011")
 	colType     = 13 // "TYPE"=4; values: Preventive=10, Detective=9, Corrective=10
-	colTarget   = 40 // "TARGET"
-	colDetail   = 60 // "DETAIL"
+	colTarget   = 30 // "TARGET"
+	colMessage  = 90 // "SUMMARY" / Summary column. Holds Control.Summary and Finding.Detail as fallback
 )
+
+// tableWidth is the visible width of the rendered table in characters —
+// the sum of every column plus two-space separators between each pair.
+const tableWidth = colStatus + colSeverity + colID + colType + colTarget + colMessage + (6-1)*2
 
 // Format determines the output format
 type Format string
@@ -68,14 +73,14 @@ func (r *Reporter) Render(results []*types.ScanResult) error {
 	}
 }
 
-// ── Table ─────────────────────────────────────────────────────────────────────
+// ── Table ───────────────────────────────────────────────────────────────────── //
 //nolint:errcheck // writing to output stream; broken pipe not recoverable in reporter context
 func (r *Reporter) renderTable(results []*types.ScanResult) error {
 	out := r.Output
 
 	// Pre-compute reusable structural chrome (all blue when color is enabled).
-	divider    := r.blue(strings.Repeat("─", 150))
-	doubleLine := r.blue(strings.Repeat("═", 150))
+	divider    := r.blue(strings.Repeat("─", tableWidth))
+	doubleLine := r.blue(strings.Repeat("═", tableWidth))
 
 	// Header: each column title is blue+underlined and padded with padRight so that
 	// ANSI bytes do not inflate the visible width (same technique as data rows).
@@ -84,7 +89,7 @@ func (r *Reporter) renderTable(results []*types.ScanResult) error {
 	hID       := padRight(r.boldBlue("CONTROL ID"), len("CONTROL ID"), colID)
 	hType     := padRight(r.boldBlue("TYPE"),       len("TYPE"),       colType)
 	hTarget   := padRight(r.boldBlue("TARGET"),     len("TARGET"),     colTarget)
-	hDetail   := r.boldBlue("DETAIL")
+	hDetail   := r.boldBlue("SUMMARY")
 	header    := strings.Join([]string{hStatus, hSeverity, hID, hType, hTarget, hDetail}, "  ")
 
 	// Separator: pure ASCII content so wrapping the whole string in blue is safe —
@@ -95,7 +100,7 @@ func (r *Reporter) renderTable(results []*types.ScanResult) error {
 		strings.Repeat("-", colID),
 		strings.Repeat("-", colType),
 		strings.Repeat("-", colTarget),
-		strings.Repeat("-", colDetail),
+		strings.Repeat("-", colMessage),
 	}, "  "))
 
 	fmt.Fprintln(out)
@@ -125,7 +130,7 @@ func (r *Reporter) renderTable(results []*types.ScanResult) error {
 			id     := truncate(f.Control.ID, colID)
 			typ    := truncate(string(f.Control.Type), colType)
 			target := truncate(f.Target, colTarget)
-			detail := truncate(f.Detail, colDetail)
+			message := truncate(messageFor(f), colMessage)
 
 			// Non-colored columns (id, typ, target) are pure ASCII so %-*s is correct.
 			fmt.Fprintf(out, "%s  %s  %-*s  %-*s  %-*s  %s\n",
@@ -134,7 +139,7 @@ func (r *Reporter) renderTable(results []*types.ScanResult) error {
 				colID, id,
 				colType, typ,
 				colTarget, target,
-				detail,
+				message,
 			)
 		}
 
@@ -211,6 +216,12 @@ func (r *Reporter) renderTable(results []*types.ScanResult) error {
 func (r *Reporter) writeFindingDetail(out io.Writer, f types.Finding) {
 	fmt.Fprintln(out)
 	fmt.Fprintln(out, r.blue(fmt.Sprintf("[%s] %s — %s", f.Control.ID, f.Control.Title, f.Target)))
+	if f.Control.Summary != "" {
+		fmt.Fprintf(out, "%s%s\n", r.blue("  Summary:     "), f.Control.Summary)
+	}
+	if f.Control.Description != "" {
+		fmt.Fprintf(out, "%s%s\n", r.blue("  Description: "), f.Control.Description)
+	}
 	fmt.Fprintf(out, "%s%s\n", r.blue("  Detail:      "), f.Detail)
 	if f.Evidence != "" {
 		fmt.Fprintf(out, "%s%s\n", r.blue("  Evidence:    "), truncate(f.Evidence, 200))
@@ -230,7 +241,7 @@ func (r *Reporter) writeFindingDetail(out io.Writer, f types.Finding) {
 	fmt.Fprintf(out, "%s%s\n", r.blue("  Compliance:  "), compliance)
 }
 
-// ── JSON ──────────────────────────────────────────────────────────────────────
+// ── JSON ────────────────────────────────────────────────────────────────────── //
 
 type jsonOutput struct {
 	GeneratedAt string               `json:"generated_at"`
@@ -257,7 +268,7 @@ func (r *Reporter) renderJSON(results []*types.ScanResult) error {
 	return enc.Encode(out)
 }
 
-// ── Markdown ──────────────────────────────────────────────────────────────────
+// ── Markdown ────────────────────────────────────────────────────────────────── //
 //nolint:errcheck // writing to output stream; broken pipe not recoverable in reporter context
 func (r *Reporter) renderMarkdown(results []*types.ScanResult) error {
 	fmt.Fprintf(r.Output, "# dockerAudit Report\n\n")
@@ -317,6 +328,12 @@ func (r *Reporter) writeMarkdownFindings(results []*types.ScanResult, status typ
 			fmt.Fprintf(r.Output, "### %s — %s\n\n", f.Control.ID, f.Control.Title)
 			fmt.Fprintf(r.Output, "- **Target:** `%s`\n", f.Target)
 			fmt.Fprintf(r.Output, "- **Severity:** %s\n", f.Control.Severity)
+			if f.Control.Summary != "" {
+				fmt.Fprintf(r.Output, "- **Summary:** %s\n", f.Control.Summary)
+			}
+			if f.Control.Description != "" {
+				fmt.Fprintf(r.Output, "- **Description:** %s\n", f.Control.Description)
+			}
 			fmt.Fprintf(r.Output, "- **Detail:** %s\n", f.Detail)
 			if f.Evidence != "" {
 				fmt.Fprintf(r.Output, "- **Evidence:** %s\n", f.Evidence)
@@ -337,18 +354,26 @@ func (r *Reporter) writeMarkdownFindings(results []*types.ScanResult, status typ
 	}
 }
 
-// ── SARIF ─────────────────────────────────────────────────────────────────────
+// ── SARIF ───────────────────────────────────────────────────────────────────── //
 
 // renderSARIF produces a minimal SARIF 2.1.0 output compatible with GitHub Code Scanning.
 func (r *Reporter) renderSARIF(results []*types.ScanResult) error {
 	type sarifMessage struct {
 		Text string `json:"text"`
 	}
+	// sarifMultiformatMessage carries both plain text and markdown for SARIF
+	// rule help blocks. GitHub Code Scanning renders the markdown form when
+	// present, improving readability of remediation snippets.
+	type sarifMultiformatMessage struct {
+		Text     string `json:"text"`
+		Markdown string `json:"markdown,omitempty"`
+	}
 	type sarifRule struct {
-		ID               string       `json:"id"`
-		Name             string       `json:"name"`
-		ShortDescription sarifMessage `json:"shortDescription"`
-		FullDescription  sarifMessage `json:"fullDescription"`
+		ID               string                   `json:"id"`
+		Name             string                   `json:"name"`
+		ShortDescription sarifMessage             `json:"shortDescription"`
+		FullDescription  sarifMessage             `json:"fullDescription"`
+		Help             *sarifMultiformatMessage `json:"help,omitempty"`
 	}
 	type sarifRegion struct {
 		StartLine int `json:"startLine"`
@@ -399,12 +424,29 @@ func (r *Reporter) renderSARIF(results []*types.ScanResult) error {
 				continue
 			}
 			if !rulesSeen[f.Control.ID] {
-				run.Tool.Driver.Rules = append(run.Tool.Driver.Rules, sarifRule{
+				// SARIF field mapping follows the three-tier Control schema:
+				//   Summary      → shortDescription (one-line explanation)
+				//   Description  → fullDescription  (2-3 sentence rationale)
+				//   Remediation  → help             (actionable fix steps)
+				// When Summary is empty (legacy controls), fall back to
+				// Description so the shortDescription field is never blank.
+				shortText := f.Control.Summary
+				if shortText == "" {
+					shortText = f.Control.Description
+				}
+				rule := sarifRule{
 					ID:               f.Control.ID,
 					Name:             f.Control.Title,
-					ShortDescription: sarifMessage{Text: f.Control.Description},
-					FullDescription:  sarifMessage{Text: f.Control.Remediation},
-				})
+					ShortDescription: sarifMessage{Text: shortText},
+					FullDescription:  sarifMessage{Text: f.Control.Description},
+				}
+				if f.Control.Remediation != "" {
+					rule.Help = &sarifMultiformatMessage{
+						Text:     f.Control.Remediation,
+						Markdown: f.Control.Remediation,
+					}
+				}
+				run.Tool.Driver.Rules = append(run.Tool.Driver.Rules, rule)
 				rulesSeen[f.Control.ID] = true
 			}
 
@@ -447,7 +489,7 @@ func (r *Reporter) renderSARIF(results []*types.ScanResult) error {
 	return enc.Encode(output)
 }
 
-// ── JUnit XML ─────────────────────────────────────────────────────────────────
+// ── JUnit XML ───────────────────────────────────────────────────────────────── //
 
 // renderJUnit produces a JUnit XML output compatible with CI/CD systems.
 func (r *Reporter) renderJUnit(results []*types.ScanResult) error {
@@ -546,7 +588,7 @@ func (r *Reporter) renderJUnit(results []*types.ScanResult) error {
 	return err
 }
 
-// ── helpers ───────────────────────────────────────────────────────────────────
+// ── helpers ─────────────────────────────────────────────────────────────────── //
 
 // ansiWrap wraps text with ANSI color codes.
 func ansiWrap(code, text, reset string) string {
@@ -648,12 +690,32 @@ func (r *Reporter) colorCount(label string, n int, code string) string {
 	return ansiWrap(code, s, "\033[0m")
 }
 
+// truncate shortens s to at most n visible (rune-counted) characters, appending
+// "..." when truncation occurs. Counts grapheme runes rather than raw bytes so
+// multibyte UTF-8 characters (§, –, en/em dashes, etc.) are handled correctly
+// and never split mid-sequence.
 func truncate(s string, n int) string {
 	s = strings.ReplaceAll(s, "\n", " ")
-	if len(s) <= n {
+	if utf8.RuneCountInString(s) <= n {
 		return s
 	}
-	return s[:n-3] + "..."
+	if n < 3 {
+		// No room for "..." ellipsis — just cut to n runes.
+		return string([]rune(s)[:n])
+	}
+	return string([]rune(s)[:n-3]) + "..."
+}
+
+// messageFor returns the message string to render in the table's last column for a given finding.
+// Detail is used as a fallback so the column is never blank.
+func messageFor(f types.Finding) string {
+	switch f.Status {
+	case types.StatusPass, types.StatusSkipped, types.StatusWarn, types.StatusFail:
+		if f.Control.Summary != "" {
+			return f.Control.Summary
+		}
+	}
+	return f.Detail
 }
 
 // mdEscape escapes characters that break Markdown table cells.
