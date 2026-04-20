@@ -60,8 +60,11 @@ The config is picked up automatically whenever --config is not passed.`,
 			}
 			out := c.OutOrStdout()
 			fmt.Println("")
+			//nolint:errcheck // stdout write; broken pipe not recoverable
 			fmt.Fprintf(out, "Wrote configuration file to:\n  %s\n\n", path)
+			//nolint:errcheck
 			fmt.Fprintf(out, "This file is loaded automatically when --config is not specified.\n")
+			//nolint:errcheck
 			fmt.Fprintf(out, "Edit this file to customize default settings.\n")
 			fmt.Println("")
 			return nil
