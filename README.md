@@ -153,6 +153,16 @@ dockeraudit scan \
 
 ## Usage
 
+### General Commands 
+
+| Command | Description |
+|---------|-------------|
+| `init`  | Create dockeraudit.yaml configuration file |
+| `report controls` | List all hardening controls with compliance mappings |
+| `completion` | Generate shell completion scripts (bash/zsh/fish/powershell) |
+
+<br>
+
 ### Scan Modes
 
 | Mode | Description |
@@ -162,8 +172,6 @@ dockeraudit scan \
 | `docker` | Scan Dockerfiles and Docker Compose files |
 | `k8s` | Scan Kubernetes manifests for security misconfigurations |
 | `terraform` | Scan Terraform files for container security issues |
-| `report controls` | List all hardening controls with compliance mappings |
-| `completion` | Generate shell completion scripts (bash/zsh/fish/powershell) |
 
 
 ### Command Flags 
