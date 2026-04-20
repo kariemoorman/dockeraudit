@@ -101,6 +101,9 @@ dockeraudit --version
 ## Quick Start
 
 ```bash
+# Create configuration file ($HOME/.config/dockeraudit/dockeraudit.yaml)
+dockeraudit init 
+
 # Scan a Docker image
 dockeraudit image nginx:latest
 
@@ -613,7 +616,7 @@ dockeraudit terraform aws/ --fail-on medium
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--verbose` | `false` | Print scan progress to stderr |
-| `--config` | `.dockeraudit.yaml` | Path to config file |
+| `--config` | `~/.config/dockeraudit/dockeraudit.yaml` | Path to config file |
 | `--version` | | Print version |
 
 </details>
@@ -623,15 +626,16 @@ dockeraudit terraform aws/ --fail-on medium
 
 dockeraudit supports a YAML configuration file for setting default options. CLI flags always override config file values.
 
-**Config file discovery order:**
+**Config File Discovery Order:**
 
 1. Path specified by `--config` flag
-2. `.dockeraudit.yaml` in the current working directory
-3. `.dockeraudit.yml` in the current working directory
+2. `$XDG_CONFIG_HOME/dockeraudit/dockeraudit.yaml` (falls back to `~/.config/dockeraudit/dockeraudit.yaml`)
+
+Run `dockeraudit init` to generate the global config at the XDG path with default settings.
 
 ```yaml
-# .dockeraudit.yaml
-format: table
+# ~/.config/dockeraudit/dockeraudit.yaml
+format: markdown
 fail-on: high
 verbose: false
 exclude-check:
@@ -645,7 +649,7 @@ eol-file: custom-eol.json
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `format` | string | `table` | Output format: `table`, `json`, `markdown`, `sarif`, `junit` |
+| `format` | string | `markdown` | Saved file format: `table`, `json`, `markdown`, `sarif`, `junit` (terminal always renders as table) |
 | `fail-on` | string | `high` | Exit non-zero threshold: `critical`, `high`, `medium`, `low`, `any` |
 | `verbose` | bool | `false` | Print scan progress to stderr |
 | `exclude-check` | list | (empty) | Control IDs to exclude from results |
@@ -656,14 +660,14 @@ eol-file: custom-eol.json
 
 ```yaml
 # CI/CD (strict)            # Development (relaxed)       # Compliance audit
-format: sarif                format: table                  format: json
+format: sarif                format: markdown               format: json
 fail-on: critical            fail-on: any                   fail-on: low
 verbose: true                exclude-check:                 verbose: true
                                - IMAGE-001
                                - IMAGE-008
 ```
 
-See [.dockeraudit.example.yaml](.dockeraudit.example.yaml) for the full reference.
+Run `dockeraudit init` to write the annotated reference config — which documents every option — to `~/.config/dockeraudit/dockeraudit.yaml`. The same file is also viewable in the source at [internal/cmd/dockeraudit.example.yaml](internal/cmd/dockeraudit.example.yaml).
 
 ## CI/CD Integration
 

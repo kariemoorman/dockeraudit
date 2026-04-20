@@ -1,14 +1,14 @@
 # .dockeraudit.example.yaml
 # Configuration reference for dockeraudit
-# Copy to .dockeraudit.yaml and customize for your environment
 
 # -----------------------------------------------------------------------------
 # Output Format
 # -----------------------------------------------------------------------------
-# Output format for scan results
+# Format for the saved report file (written to scans/ or to --output path).
+# The terminal always renders a human-readable table regardless of this value.
 # Options: table, json, markdown, sarif, junit
-# Default: table
-format: table
+# Default: markdown
+format: markdown
 
 # -----------------------------------------------------------------------------
 # Exit Code Threshold
@@ -71,7 +71,7 @@ include-check:
 # verbose: true
 
 # Development (relaxed) - informational scanning
-# format: table
+# format: markdown
 # fail-on: any
 # verbose: false
 # exclude-check:

@@ -56,34 +56,26 @@ verbose: true
 	}
 }
 
-func TestLoadConfig_DefaultPath(t *testing.T) {
-	// Create a temp directory with a .dockeraudit.yaml and chdir into it.
+func TestLoadConfig_XDGFallback(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, ".dockeraudit.yaml")
+	cfgDir := filepath.Join(dir, "dockeraudit")
+	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	content := `format: sarif
 fail-on: critical
 `
-	if err := os.WriteFile(cfgPath, []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(cfgDir, "dockeraudit.yaml"), []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
-
-	// Save and restore cwd.
-	origDir, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Chdir(origDir) })
-
-	if err := os.Chdir(dir); err != nil {
-		t.Fatal(err)
-	}
+	t.Setenv("XDG_CONFIG_HOME", dir)
 
 	cfg, err := LoadConfig("")
 	if err != nil {
 		t.Fatalf("LoadConfig(\"\") error: %v", err)
 	}
 	if cfg == nil {
-		t.Fatal("LoadConfig returned nil — should have found .dockeraudit.yaml")
+		t.Fatal("LoadConfig returned nil — should have found XDG config")
 		return
 	}
 	if cfg.Format != "sarif" {
@@ -94,50 +86,11 @@ fail-on: critical
 	}
 }
 
-func TestLoadConfig_YMLExtension(t *testing.T) {
-	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, ".dockeraudit.yml")
-	content := `format: markdown
-`
-	if err := os.WriteFile(cfgPath, []byte(content), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	origDir, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Chdir(origDir) })
-
-	if err := os.Chdir(dir); err != nil {
-		t.Fatal(err)
-	}
-
-	cfg, err := LoadConfig("")
-	if err != nil {
-		t.Fatalf("LoadConfig(\"\") error: %v", err)
-	}
-	if cfg == nil {
-		t.Fatal("LoadConfig returned nil — should have found .dockeraudit.yml")
-		return
-	}
-	if cfg.Format != "markdown" {
-		t.Errorf("Format = %q, want %q", cfg.Format, "markdown")
-	}
-}
-
 func TestLoadConfig_NoConfigFile(t *testing.T) {
+	// Point XDG + HOME at an empty temp dir so lookup finds nothing.
 	dir := t.TempDir()
-
-	origDir, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Chdir(origDir) })
-
-	if err := os.Chdir(dir); err != nil {
-		t.Fatal(err)
-	}
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	t.Setenv("HOME", dir)
 
 	cfg, err := LoadConfig("")
 	if err != nil {
