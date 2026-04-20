@@ -1,8 +1,14 @@
 # Changelog
 
-## [Unreleased] 
+## [0.1.0] - 2026-04-19
 
 ### Added
+
+#### General
+- Summary field to Controls
+- Remediation results for WARN results
+- Audit of control mappings against most recent compliance frameworks
+- Compliance framework documentation
 
 #### Registry Scanner (4 controls)
 - REGISTRY-001: insecure-registries entries in `/etc/docker/daemon.json`
