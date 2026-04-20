@@ -23,8 +23,7 @@ func init() {
 func main() {
 	// Persistent flags available on all subcommands.
 	rootCmd.PersistentFlags().Bool("verbose", false, "Print scan progress to stderr")
-	rootCmd.PersistentFlags().String("config", "", "Path to config file (default: .dockeraudit.yaml)")
-
+	rootCmd.PersistentFlags().String("config", "", "Path to config file (default: ~/.config/dockeraudit/dockeraudit.yaml)")
 	// Set cmd.Verbose, cmd.Version, and load config before any subcommand runs.
 	rootCmd.PersistentPreRunE = func(c *cobra.Command, _ []string) error {
 		v, _ := c.Root().PersistentFlags().GetBool("verbose")
@@ -47,6 +46,7 @@ func main() {
 		return nil
 	}
 
+	rootCmd.AddCommand(cmd.NewInitCmd())
 	rootCmd.AddCommand(cmd.NewScanCmd())
 	rootCmd.AddCommand(cmd.NewImageCmd())
 	rootCmd.AddCommand(cmd.NewDockerCmd())

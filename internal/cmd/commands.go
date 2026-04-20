@@ -25,6 +25,11 @@ var Version string
 // defaultFailOn is the default --fail-on threshold used consistently across all subcommands.
 const defaultFailOn = "high"
 
+// defaultFormat is the default --format used consistently across all subcommands.
+// It controls the format of the saved report file; the terminal always renders
+// a human-readable table regardless of this value.
+const defaultFormat = "markdown"
+
 // ExitCodeError is returned from RunE handlers to signal a non-zero exit code
 // without bypassing deferred cleanup. main.go should check for this type and
 // call os.Exit with the code.
@@ -212,8 +217,8 @@ Examples:
 		"Kubernetes manifest file(s) or directories to scan")
 	cmd.Flags().StringSliceVarP(&tfPaths, "tf", "t", nil,
 		"Terraform file(s) or directories to scan")
-	cmd.Flags().StringVarP(&format, "format", "f", "table",
-		"Output format: table, json, markdown, sarif, junit")
+	cmd.Flags().StringVarP(&format, "format", "f", defaultFormat,
+		"Saved report format: table, json, markdown, sarif, junit (terminal always renders as table)")
 	cmd.Flags().StringVarP(&output, "output", "o", "",
 		"Write results to file (default: stdout)")
 	cmd.Flags().StringVar(&failOn, "fail-on", defaultFailOn,
@@ -234,7 +239,7 @@ Examples:
 	return cmd
 }
 
-// ── image ─────────────────────────────────────────────────────────────────────
+// ── image ───────────────────────────────────────────────────────────────────── //
 
 func NewImageCmd() *cobra.Command {
 	var (
@@ -349,7 +354,7 @@ Examples:
 		},
 	}
 
-	cmd.Flags().StringVarP(&format, "format", "f", "table", "Output format: table, json, markdown, sarif, junit")
+	cmd.Flags().StringVarP(&format, "format", "f", defaultFormat, "Saved report format: table, json, markdown, sarif, junit (terminal always renders as table)")
 	cmd.Flags().StringVarP(&output, "output", "o", "", "Write results to file")
 	cmd.Flags().StringVar(&failOn, "fail-on", defaultFailOn, "Exit non-zero on: critical, high, medium, low, any")
 	cmd.Flags().IntVar(&timeout, "timeout", 180, "Timeout in seconds per image")
@@ -428,7 +433,7 @@ Examples:
 		},
 	}
 
-	cmd.Flags().StringVarP(&format, "format", "f", "table", "Output format: table, json, markdown, sarif, junit")
+	cmd.Flags().StringVarP(&format, "format", "f", defaultFormat, "Saved report format: table, json, markdown, sarif, junit (terminal always renders as table)")
 	cmd.Flags().StringVarP(&output, "output", "o", "", "Write results to file")
 	cmd.Flags().StringVar(&failOn, "fail-on", defaultFailOn, "Exit non-zero on: critical, high, medium, low, any")
 	cmd.Flags().StringSliceVar(&excludeChecks, "exclude-check", nil,
@@ -507,7 +512,7 @@ Examples:
 		},
 	}
 
-	cmd.Flags().StringVarP(&format, "format", "f", "table", "Output format: table, json, markdown, sarif, junit")
+	cmd.Flags().StringVarP(&format, "format", "f", defaultFormat, "Saved report format: table, json, markdown, sarif, junit (terminal always renders as table)")
 	cmd.Flags().StringVarP(&output, "output", "o", "", "Write results to file")
 	cmd.Flags().StringVar(&failOn, "fail-on", defaultFailOn, "Exit non-zero on: critical, high, medium, low, any")
 	cmd.Flags().StringSliceVar(&excludeChecks, "exclude-check", nil,
@@ -604,7 +609,7 @@ Examples:
 		},
 	}
 
-	cmd.Flags().StringVarP(&format, "format", "f", "table", "Output format: table, json, markdown, sarif, junit")
+	cmd.Flags().StringVarP(&format, "format", "f", defaultFormat, "Saved report format: table, json, markdown, sarif, junit (terminal always renders as table)")
 	cmd.Flags().StringVarP(&output, "output", "o", "", "Write results to file")
 	cmd.Flags().StringVar(&failOn, "fail-on", defaultFailOn, "Exit non-zero on: critical, high, medium, low, any")
 	cmd.Flags().StringSliceVar(&excludeChecks, "exclude-check", nil,
@@ -749,6 +754,10 @@ func autoSave(results []*types.ScanResult, format, scannerName string) error {
 
 // renderAndSave renders results to the requested output writer and — when no
 // explicit --output path was given — also auto-saves a copy under scans/.
+//
+// The --format flag controls the saved file format. Interactive stdout always
+// renders the human-readable table (with ANSI colour) so the terminal view
+// stays readable regardless of the chosen file format.
 func renderAndSave(results []*types.ScanResult, format, output, scannerName string) error {
 	w, cleanup, err := outputWriter(output)
 	if err != nil {
@@ -756,7 +765,14 @@ func renderAndSave(results []*types.ScanResult, format, output, scannerName stri
 	}
 	defer cleanup()
 
-	rep := newReporter(format)
+	// Explicit -o: write the chosen format to that file.
+	// No -o: stdout gets the table view; the chosen format is auto-saved below.
+	stdoutFormat := format
+	if output == "" {
+		stdoutFormat = string(reporter.FormatTable)
+	}
+
+	rep := newReporter(stdoutFormat)
 	rep.Output = w
 	rep.Color = output == "" // ANSI colour only for interactive stdout
 	if err := rep.Render(results); err != nil {

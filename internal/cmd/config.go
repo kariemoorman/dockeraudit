@@ -25,26 +25,22 @@ type Config struct {
 // when the corresponding CLI flag was not explicitly set.
 var LoadedConfig *Config
 
-// defaultConfigPaths is the ordered list of paths to search for a config file.
-var defaultConfigPaths = []string{
-	".dockeraudit.yaml",
-	".dockeraudit.yml",
-}
-
-// LoadConfig reads the configuration from the given path, or searches
-// defaultConfigPaths if path is empty. Returns nil (no error) if no config
-// file is found.
+// LoadConfig reads the configuration from the given path, or falls back to
+// the user-level XDG config path ($XDG_CONFIG_HOME/dockeraudit/dockeraudit.yaml,
+// or ~/.config/dockeraudit/dockeraudit.yaml) when path is empty. Returns nil
+// (no error) if no config file is found.
 func LoadConfig(path string) (*Config, error) {
 	if path != "" {
 		return loadConfigFile(path)
 	}
-	// Search default paths
-	for _, p := range defaultConfigPaths {
-		if _, err := os.Stat(p); err == nil {
-			return loadConfigFile(p)
-		}
+	userPath, err := userConfigPath()
+	if err != nil {
+		return nil, nil //nolint:nilerr // home-dir lookup failure just means no global config
 	}
-	return nil, nil // no config file found, not an error
+	if _, err := os.Stat(userPath); err != nil {
+		return nil, nil //nolint:nilerr // missing global config is not an error
+	}
+	return loadConfigFile(userPath)
 }
 
 func loadConfigFile(path string) (*Config, error) {
